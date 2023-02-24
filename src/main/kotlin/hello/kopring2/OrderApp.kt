@@ -13,6 +13,6 @@ fun main(){
     val memberId = 1L
     val member = Member(memberId, "memberA", Grade.VIP)
     memberService.join(member)
-    val order = orderService.createOrder(memberId, "itemA", 10000)
+    val order = orderService.createOrder(memberId, "itemA", 20000)
     println(order)
 }
