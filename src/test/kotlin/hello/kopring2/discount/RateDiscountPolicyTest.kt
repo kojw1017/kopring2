@@ -20,6 +20,6 @@ class RateDiscountPolicyTest{
     fun vip_x(){
         val member = Member(1L, "memberVip", Grade.BASIC)
         val discount = discountPolicy.discount(member, 10000)
-        Assertions.assertEquals(discount, 1000)
+        Assertions.assertEquals(discount, 0)
     }
 }
