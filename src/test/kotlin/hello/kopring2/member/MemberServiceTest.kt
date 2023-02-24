@@ -1,10 +1,11 @@
 package hello.kopring2.member
 
+import hello.kopring2.AppConfig
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 class MemberServiceTest {
-    private val memberService = MemberServiceImpl()
+    private val memberService = AppConfig().memberService()
     @Test
     fun join(){
         //given
