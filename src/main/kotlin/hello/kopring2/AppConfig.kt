@@ -5,11 +5,19 @@ import hello.kopring2.discount.RateDiscountPolicy
 import hello.kopring2.member.MemberServiceImpl
 import hello.kopring2.member.MemoryMemberRepo
 import hello.kopring2.order.OrderServiceImpl
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 
+@Configuration
 class AppConfig {
+    @Bean
     fun memberService() = MemberServiceImpl(memberRepository())
-    private fun memberRepository() = MemoryMemberRepo()
+    @Bean
+    fun memberRepository() = MemoryMemberRepo()
+    @Bean
     fun orderService() = OrderServiceImpl(MemoryMemberRepo(), discountPolicy())
+    @Bean
+    fun discountPolicy() = RateDiscountPolicy()
+//    @Bean
 //    fun discountPolicy() = FixDiscountPolicy()
-    private fun discountPolicy() = RateDiscountPolicy()
 }
