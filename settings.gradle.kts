@@ -1,1 +1,1 @@
-rootProject.name = "kopring2"
+rootProject.name = "tdd"
