@@ -1,47 +1,242 @@
-# 7. 테스트·QA 전략
+# 7. 테스트 전략
 
-## 1. 단위 테스트 (Unit Test)
--   요구사항에 명시된 바와 같이, 각 기능 및 제약사항에 대해 Junit5, Mockito 등을 활용하여 단위 테스트를 작성합니다.
--   **테스트 대상:**
-    -   대기열 토큰 생성 및 검증 로직
-    -   좌석 상태 변경 로직 (AVAILABLE -> RESERVED -> SOLD)
-    -   잔액 충전 및 차감 로직
-    -   예약 만료 로직
-    -   각 API의 Controller, Service, Repository 계층별 기능
+## 1. 테스트 개요
 
-## 2. 통합 테스트 (Integration Test)
--   실제 DB와 Redis 환경(또는 Testcontainers를 이용한 가상 환경)을 연동하여 API의 전체 흐름을 테스트합니다.
--   **주요 시나리오:**
-    1.  토큰 발급 -> 좌석 조회 -> 좌석 예약 -> 결제까지 이어지는 성공적인 Happy Path 시나리오.
-    2.  예약 후 결제하지 않아 만료되는 시나리오.
-    3.  잔액 부족으로 결제 실패하는 시나리오.
+이 문서는 콘서트 예약 서비스의 핵심 기능을 검증하기 위한 테스트 전략을 설명합니다. 헥사고날 아키텍처 특성을 활용하여 각 계층별로 효과적인 테스트를 구성합니다.
 
-## 3. 동시성 테스트 (Concurrency Test)
--   이 프로젝트의 핵심적인 품질 보증 활동입니다.
--   **도구:** `nGrinder`, `JMeter`, `k6` 등 부하 테스트 도구를 사용합니다.
--   **테스트 시나리오:**
-    -   **좌석 중복 예약 테스트:** 다수의 가상 유저(e.g., 100명)가 **동일한 좌석**에 대해 동시에 예약 요청 API를 보내도록 설정합니다.
-    -   **검증:** 테스트 종료 후, DB를 확인하여 해당 좌석이 단 한 건의 예약/결제로만 처리되었는지 검증합니다. `409 Conflict` 응답이 예상대로 반환되었는지 로그를 통해 확인합니다.
-    -   **대기열 시스템 테스트:** 수천 개의 토큰 발급 요청을 동시에 보내 대기열 시스템이 요청을 순서대로 처리하고 서버 부하를 효과적으로 제어하는지 모니터링합니다.
+## 2. 테스트 유형 및 목적
 
-## 4. 성능 테스트
--   **목적:** 시스템이 목표 TPS(Transaction Per Second)를 달성할 수 있는지 검증합니다.
--   **주요 측정 지표:**
-    -   응답 시간 (Response Time): 요청에 대한 응답까지 걸리는 시간
-    -   처리량 (Throughput): 단위 시간당 처리 가능한 요청 수
-    -   리소스 사용률: CPU, 메모리, 네트워크 등 시스템 자원 사용 현황
+| 테스트 유형 | 설명 | 목적 | 툴/프레임워크 |
+|------------|-----|------|--------------|
+| **단위 테스트** | 개별 클래스/메서드 기능 검증 | 비즈니스 로직 정확성 확인 | JUnit 5, Mockito |
+| **통합 테스트** | 여러 컴포넌트 간 상호작용 검증 | 시스템 통합 동작 확인 | JUnit 5, TestContainers |
+| **동시성 테스트** | 동시 요청 처리 검증 | 동시성 제어 메커니즘 확인 | JUnit 5, CountDownLatch |
 
-## 5. 회복성 테스트 (Resilience Test)
--   **목적:** 시스템의 일부가 실패하더라도 전체 시스템이 정상적으로 동작하는지 검증합니다.
--   **시나리오:**
-    -   Redis 서버 일시적 다운 상황에서의 시스템 동작 테스트
-    -   여러 애플리케이션 인스턴스 중 일부가 다운된 상황에서의 시스템 동작 테스트
-    -   DB 연결 지연 상황에서의 시스템 동작 테스트
+## 3. 헥사고날 아키텍처 기반 테스트 전략
 
-## 6. 자동화 테스트 파이프라인
--   CI/CD 파이프라인에 테스트 단계를 통합하여 코드 변경 시마다 자동으로 테스트를 실행합니다.
--   **순서:**
-    1. 단위 테스트 실행
-    2. 통합 테스트 실행
-    3. 코드 품질 검사 (SonarQube 등)
-    4. 필요 시 동시성 테스트 실행 (별도 환경에서)
+```mermaid
+flowchart TD
+    A[도메인 모델 테스트] --> B[유스케이스 테스트]
+    B --> C[어댑터 테스트]
+    C --> D[E2E 테스트]
+    
+    style A fill:#a8d5ff,stroke:#0066cc,color:#000000
+    style B fill:#ffe0a8,stroke:#cc7700,color:#000000
+    style C fill:#d5ffa8,stroke:#66cc00,color:#000000
+    style D fill:#ffa8d5,stroke:#cc0066,color:#000000
+```
+
+### 3.1 도메인 모델 테스트
+
+- **대상**: 엔티티, 값 객체, 도메인 서비스
+- **목적**: 핵심 비즈니스 규칙 검증
+- **모킹**: 외부 의존성 없음 (순수 도메인 모델)
+
+#### 예시 코드
+```kotlin
+@Test
+fun `임시 예약 상태의 좌석은 예약 가능 상태로 만료되어야 한다`() {
+    // Given
+    val seat = Seat(id = 1, status = SeatStatus.RESERVED)
+    val reservation = Reservation(
+        id = 1,
+        seatId = seat.id,
+        status = ReservationStatus.PENDING,
+        expiresAt = LocalDateTime.now().minusMinutes(1)
+    )
+    
+    // When
+    val expired = reservationService.checkAndExpireReservation(reservation, seat)
+    
+    // Then
+    assertTrue(expired)
+    assertEquals(SeatStatus.AVAILABLE, seat.status)
+    assertEquals(ReservationStatus.EXPIRED, reservation.status)
+}
+```
+
+### 3.2 유스케이스(애플리케이션 서비스) 테스트
+
+- **대상**: 애플리케이션 서비스, 유스케이스 구현체
+- **목적**: 비즈니스 로직 오케스트레이션 검증
+- **모킹**: 출력 포트 (저장소, 분산 락 등)
+
+#### 예시 코드
+```kotlin
+@Test
+fun `좌석 예약 시 분산 락을 획득하고 예약을 생성해야 한다`() {
+    // Given
+    val userId = "user123"
+    val seatId = 1L
+    val scheduleId = 1L
+    
+    // 출력 포트 모킹
+    given(lockPort.acquireLock(any(), any(), any())).willReturn(true)
+    given(seatRepository.findBySeatNumberAndScheduleId(any(), any()))
+        .willReturn(Seat(id = seatId, status = SeatStatus.AVAILABLE))
+    
+    // When
+    val result = reservationUseCase.reserveSeat(userId, scheduleId, 1)
+    
+    // Then
+    assertTrue(result.isSuccess)
+    verify(lockPort).acquireLock(eq("seat:$scheduleId:1"), eq(userId), any())
+    verify(reservationRepository).save(any())
+    verify(lockPort).releaseLock(eq("seat:$scheduleId:1"), eq(userId))
+}
+```
+
+### 3.3 어댑터 테스트
+
+- **대상**: 컨트롤러, 레포지토리 구현체, Redis 어댑터
+- **목적**: 외부 시스템과의 통합 검증
+- **모킹**: 최소화 (실제 인프라 사용 권장)
+
+#### 예시 코드 (컨트롤러)
+```kotlin
+@WebMvcTest(ReservationController::class)
+class ReservationControllerTest {
+    
+    @MockBean
+    private lateinit var reservationUseCase: ReservationUseCase
+    
+    @Autowired
+    private lateinit var mockMvc: MockMvc
+    
+    @Test
+    fun `좌석 예약 API 호출 시 유효한 요청이면 성공 응답을 반환한다`() {
+        // Given
+        val request = ReservationRequest(scheduleId = 1, seatNumber = 1)
+        given(reservationUseCase.reserveSeat(any(), any(), any()))
+            .willReturn(ReservationResult.success(reservationId = 123))
+        
+        // When & Then
+        mockMvc.perform(post("/api/reservations")
+            .header("Authorization", "Bearer valid-token")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(ObjectMapper().writeValueAsString(request)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.reservationId").value(123))
+    }
+}
+```
+
+#### 예시 코드 (Redis 어댑터)
+```kotlin
+@SpringBootTest
+class RedisLockAdapterTest {
+    
+    @Autowired
+    private lateinit var redisLockAdapter: RedisLockAdapter
+    
+    @Test
+    fun `분산 락 획득 및 해제가 정상 동작해야 한다`() {
+        // Given
+        val resourceId = "test-resource"
+        val ownerId = "test-owner"
+        
+        // When
+        val acquired = redisLockAdapter.acquireLock(resourceId, ownerId, 5000)
+        
+        // Then
+        assertTrue(acquired)
+        
+        // When - 동일 리소스에 대한 다른 락 시도
+        val acquiredSecond = redisLockAdapter.acquireLock(resourceId, "other-owner", 5000)
+        
+        // Then
+        assertFalse(acquiredSecond)
+        
+        // When - 락 해제
+        val released = redisLockAdapter.releaseLock(resourceId, ownerId)
+        
+        // Then
+        assertTrue(released)
+    }
+}
+```
+
+## 4. 동시성 테스트
+
+### 4.1 좌석 중복 예약 테스트
+
+여러 스레드가 동시에 같은 좌석을 예약할 때 단 한 건만 성공하는지 검증합니다.
+
+```kotlin
+@Test
+fun `동시에 여러 사용자가 같은 좌석을 예약하면 한 명만 성공해야 한다`() {
+    // Given
+    val threadCount = 10
+    val latch = CountDownLatch(1)
+    val successCount = AtomicInteger(0)
+    val scheduleId = 1L
+    val seatNumber = 1
+    
+    // When
+    val threads = (1..threadCount).map { userId ->
+        Thread {
+            try {
+                latch.await() // 모든 스레드가 동시에 시작하도록 대기
+                val result = reservationService.reserveSeat("user$userId", scheduleId, seatNumber)
+                if (result.isSuccess) {
+                    successCount.incrementAndGet()
+                }
+            } catch (e: Exception) {
+                // 예외 로깅
+            }
+        }.apply { start() }
+    }
+    
+    latch.countDown() // 모든 스레드 동시 실행
+    threads.forEach { it.join() } // 모든 스레드 종료 대기
+    
+    // Then
+    assertEquals(1, successCount.get()) // 단 한 건만 성공해야 함
+}
+```
+
+### 4.2 대기열 공정성 테스트
+
+대기열에 추가된 순서대로 사용자가 활성화되는지 검증합니다.
+
+```kotlin
+@Test
+fun `대기열에 추가된 순서대로 사용자가 활성화되어야 한다`() {
+    // Given
+    val userCount = 20
+    val activeLimit = 5
+    val queueService = QueueService(redisTemplate, activeLimit)
+    
+    // When - 무작위 순서로 사용자 추가
+    val userIds = (1..userCount).map { "user$it" }.shuffled()
+    userIds.forEach { queueService.addToQueue(it) }
+    
+    // 대기열 처리
+    queueService.processQueue()
+    
+    // Then
+    val activeUsers = queueService.getActiveUsers()
+    
+    // 처음 추가된 5명의 사용자가 활성화되었는지 확인
+    assertEquals(activeLimit, activeUsers.size)
+    for (i in 0 until activeLimit) {
+        assertTrue(activeUsers.contains(userIds[i]))
+    }
+}
+```
+
+## 5. 테스트 자동화 및 품질 관리
+
+### 5.1 테스트 커버리지 목표
+
+| 영역 | 커버리지 목표 |
+|------|-------------|
+| 도메인 모델 | 90% 이상 |
+| 유스케이스 | 80% 이상 |
+| 어댑터 | 70% 이상 |
+
+### 5.2 테스트 우선순위
+
+1. **동시성 제어 로직**: 분산 락, 대기열 관련 핵심 기능
+2. **비즈니스 규칙**: 도메인 모델의 핵심 비즈니스 규칙
+3. **트랜잭션 처리**: 데이터 일관성 보장 로직
