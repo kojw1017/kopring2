@@ -24,5 +24,11 @@ class ScheduleEntity(
     val concertName: String,
 
     @Column(name = "concert_date", nullable = false)
-    val concertDate: LocalDateTime
+    val concertDate: LocalDateTime,
+
+    @Column(name = "venue", nullable = false, length = 100)
+    val venue: String = "기본 공연장",
+
+    @Column(name = "max_seats", nullable = false)
+    val maxSeats: Int = 50
 )

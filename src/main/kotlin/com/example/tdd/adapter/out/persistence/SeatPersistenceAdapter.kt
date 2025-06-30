@@ -3,9 +3,8 @@ package com.example.tdd.adapter.out.persistence
 import com.example.tdd.adapter.out.persistence.mapper.PersistenceMapper
 import com.example.tdd.adapter.out.persistence.repository.ScheduleJpaRepository
 import com.example.tdd.adapter.out.persistence.repository.SeatJpaRepository
-import com.example.tdd.application.port.out.SeatRepositoryPort
+import com.example.tdd.application.port.out.SeatRepository
 import com.example.tdd.domain.model.Seat
-import com.example.tdd.domain.model.SeatStatus
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
@@ -18,22 +17,14 @@ class SeatPersistenceAdapter(
     private val seatJpaRepository: SeatJpaRepository,
     private val scheduleJpaRepository: ScheduleJpaRepository,
     private val mapper: PersistenceMapper
-) : SeatRepositoryPort {
+) : SeatRepository {
 
     /**
      * 특정 일정의 모든 좌석을 조회합니다.
      */
-    override fun findAllByScheduleId(scheduleId: Long): List<Seat> {
+    override fun findByScheduleId(scheduleId: Long): List<Seat> {
         val seatEntities = seatJpaRepository.findAllByScheduleId(scheduleId)
         return seatEntities.map { mapper.mapToDomainSeat(it) }
-    }
-
-    /**
-     * 특정 일정과 좌석 번호로 좌석을 조회합니다.
-     */
-    override fun findByScheduleIdAndSeatNumber(scheduleId: Long, seatNumber: Int): Seat? {
-        val seatEntity = seatJpaRepository.findByScheduleIdAndSeatNumber(scheduleId, seatNumber) ?: return null
-        return mapper.mapToDomainSeat(seatEntity)
     }
 
     /**
@@ -45,12 +36,11 @@ class SeatPersistenceAdapter(
     }
 
     /**
-     * 좌석 상태를 업데이트합니다.
+     * 특정 일정의 특정 좌석 번호로 좌석을 조회합니다.
      */
-    @Transactional
-    override fun updateStatus(seatId: Long, status: SeatStatus): Boolean {
-        val updatedRows = seatJpaRepository.updateStatus(seatId, mapper.mapToEntitySeatStatus(status))
-        return updatedRows > 0
+    override fun findByScheduleIdAndSeatNumber(scheduleId: Long, seatNumber: Int): Seat? {
+        val seatEntity = seatJpaRepository.findByScheduleIdAndSeatNumber(scheduleId, seatNumber) ?: return null
+        return mapper.mapToDomainSeat(seatEntity)
     }
 
     /**
@@ -65,5 +55,22 @@ class SeatPersistenceAdapter(
         val savedEntity = seatJpaRepository.save(seatEntity)
 
         return mapper.mapToDomainSeat(savedEntity)
+    }
+
+    /**
+     * 여러 좌석을 한 번에 저장합니다.
+     */
+    @Transactional
+    override fun saveAll(seats: List<Seat>): List<Seat> {
+        return seats.map { save(it) }
+    }
+
+    /**
+     * 특정 일정의 예약 가능한 좌석들을 조회합니다.
+     */
+    override fun findAvailableSeats(scheduleId: Long): List<Seat> {
+        val seatEntities = seatJpaRepository.findAllByScheduleId(scheduleId)
+            .filter { it.status.name == "AVAILABLE" }
+        return seatEntities.map { mapper.mapToDomainSeat(it) }
     }
 }

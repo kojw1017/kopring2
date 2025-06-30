@@ -1,51 +1,60 @@
 package com.example.tdd.application.port.`in`
 
+import java.time.LocalDateTime
+
 /**
- * 대기열 토큰 발급 및 관리를 위한 인바운드 포트
+ * 큐 토큰 관리 인바운드 포트
  */
 interface QueueTokenUseCase {
     /**
-     * 사용자 대기열 토큰을 발급합니다.
-     *
-     * @param userId 사용자 ID
-     * @return 발급된 토큰 정보
+     * 큐 토큰을 발급합니다.
      */
-    fun issueToken(userId: String): TokenResponse
+    fun issueToken(command: IssueTokenCommand): TokenResponse
 
     /**
-     * 사용자의 대기열 상태를 조회합니다.
-     *
-     * @param token 대기열 토큰
-     * @return 현재 대기열 상태 정보
+     * 토큰 상태를 조회합니다.
      */
-    fun getQueueStatus(token: String): QueueStatusResponse
+    fun getTokenStatus(token: String): TokenStatusResponse
+
+    /**
+     * 대기 중인 토큰들을 활성화합니다.
+     */
+    fun activateWaitingTokens(): TokenActivationResult
 }
 
 /**
- * 토큰 발급 응답 데이터
+ * 토큰 발급 명령
+ */
+data class IssueTokenCommand(
+    val userId: String
+)
+
+/**
+ * 토큰 응답 데이터
  */
 data class TokenResponse(
     val token: String,
-    val status: QueueStatus,
-    val rank: Int?,
-    val expiresIn: Int
+    val queuePosition: Long,
+    val estimatedWaitTime: Long,
+    val isActive: Boolean
 )
 
 /**
- * 대기열 상태 응답 데이터
+ * 토큰 상태 응답 데이터
  */
-data class QueueStatusResponse(
-    val userId: String,
-    val status: QueueStatus,
-    val rank: Int?,
-    val estimatedActivationTime: Long?
+data class TokenStatusResponse(
+    val token: String,
+    val isValid: Boolean,
+    val isActive: Boolean,
+    val queuePosition: Long,
+    val estimatedWaitTime: Long,
+    val ttl: Long
 )
 
 /**
- * 대기열 상태 Enum
+ * 토큰 활성화 결과
  */
-enum class QueueStatus {
-    WAITING,   // 대기 중
-    ACTIVE,    // 활성화 상태 (서비스 이용 가능)
-    EXPIRED    // 만료됨
-}
+data class TokenActivationResult(
+    val activatedCount: Int,
+    val totalWaitingCount: Long
+)

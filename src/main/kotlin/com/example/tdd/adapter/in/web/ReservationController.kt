@@ -1,46 +1,89 @@
 package com.example.tdd.adapter.`in`.web
 
-import com.example.tdd.application.port.`in`.ReservationCommand
-import com.example.tdd.application.port.`in`.SeatReservationUseCase
+import com.example.tdd.application.port.`in`.ReservationUseCase
+import com.example.tdd.application.port.`in`.ReserveSeatCommand
+import com.example.tdd.application.port.`in`.CancelReservationCommand
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
+import java.math.BigDecimal
 import java.time.LocalDateTime
 
 /**
- * 좌석 예약 컨트롤러
+ * 예약 관리 컨트롤러
  */
 @RestController
 @RequestMapping("/api/reservations")
 class ReservationController(
-    private val seatReservationUseCase: SeatReservationUseCase
+    private val reservationUseCase: ReservationUseCase
 ) {
 
     /**
-     * 좌석 예약 요청 API
+     * 좌석 예약 API
      */
     @PostMapping
-    fun reserveSeat(@RequestBody request: ReservationRequest): ResponseEntity<ReservationResponse> {
-        // 요청 데이터를 Command 객체로 변환
-        val command = ReservationCommand(
+    fun reserveSeat(
+        @RequestBody request: ReserveSeatRequest,
+        @RequestHeader("Authorization") token: String
+    ): ResponseEntity<ReservationDto> {
+        val command = ReserveSeatCommand(
             userId = request.userId,
-            scheduleId = request.scheduleId,
-            seatNumber = request.seatNumber
+            seatId = request.seatId,
+            token = token.removePrefix("Bearer ")
         )
 
-        // 유스케이스 호출
-        val result = seatReservationUseCase.reserveSeat(command)
+        val reservation = reservationUseCase.reserveSeat(command)
 
-        // 응답 생성
         return ResponseEntity.ok(
-            ReservationResponse(
-                reservationId = result.reservationId,
-                seatNumber = result.seatNumber,
-                status = result.status,
-                expiresAt = result.expiresAt
+            ReservationDto(
+                reservationId = reservation.reservationId,
+                userId = reservation.userId,
+                seatNumber = reservation.seatNumber,
+                concertName = reservation.concertName,
+                concertDate = reservation.concertDate,
+                price = reservation.price,
+                status = reservation.status,
+                expiresAt = reservation.expiresAt
             )
+        )
+    }
+
+    /**
+     * 예약 취소 API
+     */
+    @DeleteMapping("/{reservationId}")
+    fun cancelReservation(
+        @PathVariable reservationId: Long,
+        @RequestParam userId: String
+    ): ResponseEntity<Void> {
+        val command = CancelReservationCommand(
+            reservationId = reservationId,
+            userId = userId
+        )
+
+        reservationUseCase.cancelReservation(command)
+        return ResponseEntity.noContent().build()
+    }
+
+    /**
+     * 사용자 예약 목록 조회 API
+     */
+    @GetMapping
+    fun getUserReservations(@RequestParam userId: String): ResponseEntity<List<ReservationDto>> {
+        val reservations = reservationUseCase.getUserReservations(userId)
+
+        return ResponseEntity.ok(
+            reservations.map { reservation ->
+                ReservationDto(
+                    reservationId = reservation.reservationId,
+                    userId = reservation.userId,
+                    seatNumber = reservation.seatNumber,
+                    concertName = reservation.concertName,
+                    concertDate = reservation.concertDate,
+                    price = reservation.price,
+                    status = reservation.status,
+                    expiresAt = reservation.expiresAt
+                )
+            }
         )
     }
 }
@@ -48,18 +91,21 @@ class ReservationController(
 /**
  * 좌석 예약 요청 DTO
  */
-data class ReservationRequest(
+data class ReserveSeatRequest(
     val userId: String,
-    val scheduleId: Long,
-    val seatNumber: Int
+    val seatId: Long
 )
 
 /**
- * 좌석 예약 응답 DTO
+ * 예약 정보 DTO
  */
-data class ReservationResponse(
+data class ReservationDto(
     val reservationId: Long,
+    val userId: String,
     val seatNumber: Int,
+    val concertName: String,
+    val concertDate: LocalDateTime,
+    val price: BigDecimal,
     val status: String,
     val expiresAt: LocalDateTime
 )

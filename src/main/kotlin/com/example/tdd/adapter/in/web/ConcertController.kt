@@ -49,6 +49,7 @@ class ConcertController(
             SeatsResponse(
                 seats = seats.map { seat ->
                     SeatDto(
+                        seatId = seat.seatId,
                         seatNumber = seat.seatNumber,
                         status = seat.status,
                         price = seat.price
@@ -86,6 +87,7 @@ data class SeatsResponse(
  * 좌석 정보 DTO
  */
 data class SeatDto(
+    val seatId: Long,
     val seatNumber: Int,
     val status: String,
     val price: BigDecimal

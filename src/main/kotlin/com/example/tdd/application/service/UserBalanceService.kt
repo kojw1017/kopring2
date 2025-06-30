@@ -3,7 +3,7 @@ package com.example.tdd.application.service
 import com.example.tdd.application.port.`in`.BalanceResponse
 import com.example.tdd.application.port.`in`.ChargeBalanceCommand
 import com.example.tdd.application.port.`in`.UserBalanceUseCase
-import com.example.tdd.application.port.out.UserRepositoryPort
+import com.example.tdd.application.port.out.UserRepository
 import com.example.tdd.domain.model.User
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,7 +15,7 @@ import java.math.BigDecimal
  */
 @Service
 class UserBalanceService(
-    private val userRepository: UserRepositoryPort
+    private val userRepository: UserRepository
 ) : UserBalanceUseCase {
 
     /**
@@ -24,7 +24,7 @@ class UserBalanceService(
     @Transactional
     override fun chargeBalance(command: ChargeBalanceCommand): BalanceResponse {
         // 사용자 조회 또는 생성
-        val user = userRepository.findByUserId(command.userId) ?: User(command.userId)
+        val user = userRepository.findById(command.userId) ?: User(command.userId)
 
         // 잔액 충전
         user.charge(command.amount)
@@ -43,7 +43,7 @@ class UserBalanceService(
     @Transactional(readOnly = true)
     override fun getBalance(userId: String): BalanceResponse {
         // 사용자 조회
-        val user = userRepository.findByUserId(userId)
+        val user = userRepository.findById(userId)
             ?: return BalanceResponse(userId, BigDecimal.ZERO)
 
         return BalanceResponse(

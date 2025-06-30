@@ -38,34 +38,3 @@ data class BalanceResponse(
     val userId: String,
     val balance: BigDecimal
 )
-
-/**
- * 결제 처리를 위한 인바운드 포트
- */
-interface PaymentUseCase {
-    /**
-     * 예약에 대한 결제를 진행합니다.
-     *
-     * @param command 결제 처리 명령
-     * @return 결제 결과
-     */
-    fun processPayment(command: PaymentCommand): PaymentResponse
-}
-
-/**
- * 결제 처리 명령 데이터
- */
-data class PaymentCommand(
-    val userId: String,
-    val reservationId: Long
-)
-
-/**
- * 결제 응답 데이터
- */
-data class PaymentResponse(
-    val paymentId: Long,
-    val reservationId: Long,
-    val amount: BigDecimal,
-    val status: String
-)

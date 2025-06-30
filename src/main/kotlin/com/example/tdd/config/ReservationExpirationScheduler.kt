@@ -1,7 +1,7 @@
 package com.example.tdd.config
 
 import com.example.tdd.application.service.ReservationExpirationService
-import com.example.tdd.application.port.out.LockManagerPort
+import com.example.tdd.application.port.out.LockManagerRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.annotation.Scheduled
@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 @EnableScheduling
 class ReservationExpirationScheduler(
     private val reservationExpirationService: ReservationExpirationService,
-    private val lockManager: LockManagerPort
+    private val lockManager: LockManagerRepository
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 

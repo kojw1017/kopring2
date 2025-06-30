@@ -1,34 +1,67 @@
 package com.example.tdd.adapter.`in`.web
 
 import com.example.tdd.application.port.`in`.QueueTokenUseCase
+import com.example.tdd.application.port.`in`.IssueTokenCommand
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 
 /**
- * 대기열 토큰 발급 및 조회 컨트롤러
+ * 큐 토큰 관리 컨트롤러
  */
 @RestController
-@RequestMapping("/api/tokens")
+@RequestMapping("/api/queue")
 class TokenController(
     private val queueTokenUseCase: QueueTokenUseCase
 ) {
 
     /**
-     * 대기열 토큰 발급 API
+     * 큐 토큰 발급 API
      */
-    @PostMapping
-    fun issueToken(@RequestBody request: TokenRequest): ResponseEntity<TokenResponse> {
-        val tokenResponse = queueTokenUseCase.issueToken(request.userId)
+    @PostMapping("/token")
+    fun issueToken(@RequestBody request: IssueTokenRequest): ResponseEntity<TokenDto> {
+        val command = IssueTokenCommand(userId = request.userId)
+        val tokenResponse = queueTokenUseCase.issueToken(command)
 
         return ResponseEntity.ok(
-            TokenResponse(
+            TokenDto(
                 token = tokenResponse.token,
-                status = tokenResponse.status.name,
-                rank = tokenResponse.rank,
-                expiresIn = tokenResponse.expiresIn
+                queuePosition = tokenResponse.queuePosition,
+                estimatedWaitTime = tokenResponse.estimatedWaitTime,
+                isActive = tokenResponse.isActive
+            )
+        )
+    }
+
+    /**
+     * 토큰 상태 조회 API
+     */
+    @GetMapping("/token/{token}")
+    fun getTokenStatus(@PathVariable token: String): ResponseEntity<TokenStatusDto> {
+        val statusResponse = queueTokenUseCase.getTokenStatus(token)
+
+        return ResponseEntity.ok(
+            TokenStatusDto(
+                token = statusResponse.token,
+                isValid = statusResponse.isValid,
+                isActive = statusResponse.isActive,
+                queuePosition = statusResponse.queuePosition,
+                estimatedWaitTime = statusResponse.estimatedWaitTime,
+                ttl = statusResponse.ttl
+            )
+        )
+    }
+
+    /**
+     * 대기 토큰 활성화 API (관리자용)
+     */
+    @PostMapping("/activate")
+    fun activateWaitingTokens(): ResponseEntity<TokenActivationDto> {
+        val result = queueTokenUseCase.activateWaitingTokens()
+
+        return ResponseEntity.ok(
+            TokenActivationDto(
+                activatedCount = result.activatedCount,
+                totalWaitingCount = result.totalWaitingCount
             )
         )
     }
@@ -37,16 +70,36 @@ class TokenController(
 /**
  * 토큰 발급 요청 DTO
  */
-data class TokenRequest(
+data class IssueTokenRequest(
     val userId: String
 )
 
 /**
- * 토큰 발급 응답 DTO
+ * 토큰 정보 DTO
  */
-data class TokenResponse(
+data class TokenDto(
     val token: String,
-    val status: String,  // "WAITING" or "ACTIVE"
-    val rank: Int?,      // 대기 순번, 활성화된 경우 null
-    val expiresIn: Int   // 토큰 만료 시간(초)
+    val queuePosition: Long,
+    val estimatedWaitTime: Long,
+    val isActive: Boolean
+)
+
+/**
+ * 토큰 상태 DTO
+ */
+data class TokenStatusDto(
+    val token: String,
+    val isValid: Boolean,
+    val isActive: Boolean,
+    val queuePosition: Long,
+    val estimatedWaitTime: Long,
+    val ttl: Long
+)
+
+/**
+ * 토큰 활성화 결과 DTO
+ */
+data class TokenActivationDto(
+    val activatedCount: Int,
+    val totalWaitingCount: Long
 )

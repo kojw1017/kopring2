@@ -1,13 +1,15 @@
 package com.example.tdd.application.service
 
-import com.example.tdd.adapter.`in`.web.exception.ConcurrentModificationException
-import com.example.tdd.adapter.`in`.web.exception.ResourceNotFoundException
+import com.example.tdd.domain.exception.SeatAlreadyReservedException
+import com.example.tdd.domain.exception.SeatNotFoundException
+import com.example.tdd.domain.exception.ScheduleNotFoundException
 import com.example.tdd.application.port.`in`.ReservationCommand
 import com.example.tdd.application.port.`in`.ReservationResponse
 import com.example.tdd.application.port.`in`.SeatReservationUseCase
-import com.example.tdd.application.port.out.LockManagerPort
-import com.example.tdd.application.port.out.ReservationRepositoryPort
-import com.example.tdd.application.port.out.SeatRepositoryPort
+import com.example.tdd.application.port.out.LockManagerRepository
+import com.example.tdd.application.port.out.ReservationRepository
+import com.example.tdd.application.port.out.SeatRepository
+import com.example.tdd.application.port.out.ScheduleRepository
 import com.example.tdd.domain.service.ReservationService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -21,48 +23,49 @@ import java.util.concurrent.TimeUnit
 @Service
 class SeatReservationService(
     private val reservationService: ReservationService,
-    private val seatRepository: SeatRepositoryPort,
-    private val reservationRepository: ReservationRepositoryPort,
-    private val lockManager: LockManagerPort,
-    @Value("\${queue.temporary-reservation-minutes}")
-    private val tempReservationMinutes: Int
+    private val seatRepository: SeatRepository,
+    private val reservationRepository: ReservationRepository,
+    private val scheduleRepository: ScheduleRepository,
+    private val lockManager: LockManagerRepository,
+    @Value("\${queue.temporary-reservation-minutes:5}")
+    private val tempReservationMinutes: Int = 5
 ) : SeatReservationUseCase {
 
     /**
      * 좌석 예약을 요청합니다.
-     * 분산 락을 사용하여 동시 예약을 방지합니다.
      *
-     * @throws ConcurrentModificationException 다른 사용자가 같은 좌석을 선택 중이거나 이미 예약된 경우
-     * @throws ResourceNotFoundException 요청한 좌석을 찾을 수 없는 경우
+     * @throws SeatAlreadyReservedException 다른 사용자가 이미 예약한 경우
+     * @throws SeatNotFoundException 요청한 좌석을 찾을 수 없는 경우
+     * @throws ConcurrentModificationException 동시 접근으로 인한 충돌 발생
      */
     @Transactional
     override fun reserveSeat(command: ReservationCommand): ReservationResponse {
         val lockKey = "seat:${command.scheduleId}:${command.seatNumber}"
-        val ownerId = command.userId
+        val lockOwner = command.userId
 
-        // 분산 락 획득 시도 (3초 타임아웃)
-        val lockAcquired = lockManager.acquireLock(lockKey, ownerId, TimeUnit.SECONDS.toMillis(3))
-
+        // 분산 락 획득 시도
+        val lockAcquired = lockManager.acquireLock(lockKey, lockOwner, TimeUnit.SECONDS.toMillis(10))
         if (!lockAcquired) {
-            throw ConcurrentModificationException("현재 다른 사용자가 해당 좌석을 선택 중입니다. 잠시 후 다시 시도해주세요.",
-                path = "/api/reservations")
+            throw ConcurrentModificationException("다른 사용자가 동일한 좌석을 예약 중입니다.")
         }
 
         try {
-            // 좌석 조회
+            // 좌석 조회 (scheduleId와 seatNumber로 조회)
             val seat = seatRepository.findByScheduleIdAndSeatNumber(command.scheduleId, command.seatNumber)
-                ?: throw ResourceNotFoundException("유효하지 않은 좌석입니다.", path = "/api/reservations")
+                ?: throw SeatNotFoundException("유효하지 않은 좌석입니다.")
 
-            // 임시 예약 ID 생성 (실제 구현에서는 DB 시퀀스 등을 사용)
+            // 일정 조회
+            val schedule = scheduleRepository.findById(command.scheduleId)
+                ?: throw ScheduleNotFoundException("콘서트 일정을 찾을 수 없습니다.")
+
+            // 임시 예약 ID 생성
             val reservationId = System.currentTimeMillis()
 
             // 도메인 서비스를 통한 좌석 예약
-            // ConcurrentModificationException이 발생할 수 있음 (이미 예약된 좌석)
-            val reservation = reservationService.reserveSeat(
+            val reservation = reservationService.createReservation(
                 userId = command.userId,
                 seat = seat,
-                reservationId = reservationId,
-                expirationMinutes = tempReservationMinutes
+                reservationId = reservationId
             )
 
             // 저장소에 예약 정보 저장
@@ -71,13 +74,18 @@ class SeatReservationService(
 
             return ReservationResponse(
                 reservationId = savedReservation.reservationId,
+                userId = savedReservation.userId,
+                seatId = updatedSeat.seatId,
                 seatNumber = updatedSeat.seatNumber,
+                concertName = schedule.concertName,
+                concertDate = schedule.concertDate,
+                price = updatedSeat.price,
                 status = savedReservation.status.name,
                 expiresAt = savedReservation.expiresAt
             )
         } finally {
             // 락 해제
-            lockManager.releaseLock(lockKey, ownerId)
+            lockManager.releaseLock(lockKey, lockOwner)
         }
     }
 }

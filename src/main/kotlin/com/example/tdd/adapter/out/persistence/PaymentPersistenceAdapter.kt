@@ -3,7 +3,7 @@ package com.example.tdd.adapter.out.persistence
 import com.example.tdd.adapter.out.persistence.mapper.PersistenceMapper
 import com.example.tdd.adapter.out.persistence.repository.PaymentJpaRepository
 import com.example.tdd.adapter.out.persistence.repository.ReservationJpaRepository
-import com.example.tdd.application.port.out.PaymentRepositoryPort
+import com.example.tdd.application.port.out.PaymentRepository
 import com.example.tdd.domain.model.Payment
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -17,7 +17,7 @@ class PaymentPersistenceAdapter(
     private val paymentJpaRepository: PaymentJpaRepository,
     private val reservationJpaRepository: ReservationJpaRepository,
     private val mapper: PersistenceMapper
-) : PaymentRepositoryPort {
+) : PaymentRepository {
 
     /**
      * ID로 결제 정보를 조회합니다.
@@ -36,7 +36,14 @@ class PaymentPersistenceAdapter(
     }
 
     /**
-     * 결제 객체를 저장합니다.
+     * 예약 ID로 결제 존재 여부를 확인합니다.
+     */
+    override fun existsByReservationId(reservationId: Long): Boolean {
+        return paymentJpaRepository.existsByReservationReservationId(reservationId)
+    }
+
+    /**
+     * 결제 정보를 저장합니다.
      */
     @Transactional
     override fun save(payment: Payment): Payment {

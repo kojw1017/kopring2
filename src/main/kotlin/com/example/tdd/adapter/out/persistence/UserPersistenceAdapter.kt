@@ -2,10 +2,9 @@ package com.example.tdd.adapter.out.persistence
 
 import com.example.tdd.adapter.out.persistence.mapper.PersistenceMapper
 import com.example.tdd.adapter.out.persistence.repository.UserJpaRepository
-import com.example.tdd.application.port.out.UserRepositoryPort
+import com.example.tdd.application.port.out.UserRepository
 import com.example.tdd.domain.model.User
 import org.springframework.stereotype.Component
-import java.math.BigDecimal
 
 /**
  * 사용자 관련 영속성 어댑터
@@ -15,12 +14,12 @@ import java.math.BigDecimal
 class UserPersistenceAdapter(
     private val userJpaRepository: UserJpaRepository,
     private val mapper: PersistenceMapper
-) : UserRepositoryPort {
+) : UserRepository {
 
     /**
      * 사용자 ID로 사용자를 조회합니다.
      */
-    override fun findByUserId(userId: String): User? {
+    override fun findById(userId: String): User? {
         val userEntity = userJpaRepository.findByUserId(userId) ?: return null
         return mapper.mapToDomainUser(userEntity)
     }
@@ -35,12 +34,9 @@ class UserPersistenceAdapter(
     }
 
     /**
-     * 사용자의 잔액을 업데이트합니다.
+     * 사용자 존재 여부를 확인합니다.
      */
-    override fun updateBalance(userId: String, balance: BigDecimal): Boolean {
-        val userEntity = userJpaRepository.findByUserId(userId) ?: return false
-        userEntity.balance = balance
-        userJpaRepository.save(userEntity)
-        return true
+    override fun existsById(userId: String): Boolean {
+        return userJpaRepository.existsByUserId(userId)
     }
 }

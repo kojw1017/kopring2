@@ -3,7 +3,7 @@ package com.example.tdd.adapter.out.persistence
 import com.example.tdd.adapter.out.persistence.mapper.PersistenceMapper
 import com.example.tdd.adapter.out.persistence.repository.ReservationJpaRepository
 import com.example.tdd.adapter.out.persistence.repository.SeatJpaRepository
-import com.example.tdd.application.port.out.ReservationRepositoryPort
+import com.example.tdd.application.port.out.ReservationRepository
 import com.example.tdd.domain.model.Reservation
 import com.example.tdd.domain.model.ReservationStatus
 import org.springframework.stereotype.Component
@@ -19,7 +19,7 @@ class ReservationPersistenceAdapter(
     private val reservationJpaRepository: ReservationJpaRepository,
     private val seatJpaRepository: SeatJpaRepository,
     private val mapper: PersistenceMapper
-) : ReservationRepositoryPort {
+) : ReservationRepository {
 
     /**
      * ID로 예약 정보를 조회합니다.
@@ -32,15 +32,15 @@ class ReservationPersistenceAdapter(
     /**
      * 사용자 ID로 모든 예약 정보를 조회합니다.
      */
-    override fun findAllByUserId(userId: String): List<Reservation> {
+    override fun findByUserId(userId: String): List<Reservation> {
         val reservationEntities = reservationJpaRepository.findAllByUserId(userId)
         return reservationEntities.map { mapper.mapToDomainReservation(it) }
     }
 
     /**
-     * 좌석 ID로 진행 중인 예약이 있는지 확인합니다.
+     * 좌석 ID로 예약 정보를 조회합니다.
      */
-    override fun findActiveBySeatId(seatId: Long): Reservation? {
+    override fun findBySeatId(seatId: Long): Reservation? {
         val reservationEntity = reservationJpaRepository.findActiveBySeatId(seatId) ?: return null
         return mapper.mapToDomainReservation(reservationEntity)
     }
@@ -54,12 +54,19 @@ class ReservationPersistenceAdapter(
     }
 
     /**
-     * 예약 상태를 업데이트합니다.
+     * 상태별 예약 목록을 조회합니다.
+     */
+    override fun findByStatus(status: ReservationStatus): List<Reservation> {
+        val reservationEntities = reservationJpaRepository.findByStatus(mapper.mapToEntityReservationStatus(status))
+        return reservationEntities.map { mapper.mapToDomainReservation(it) }
+    }
+
+    /**
+     * 예약을 삭제합니다.
      */
     @Transactional
-    override fun updateStatus(reservationId: Long, status: ReservationStatus): Boolean {
-        val updatedRows = reservationJpaRepository.updateStatus(reservationId, mapper.mapToEntityReservationStatus(status))
-        return updatedRows > 0
+    override fun deleteById(reservationId: Long) {
+        reservationJpaRepository.deleteById(reservationId)
     }
 
     /**

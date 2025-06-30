@@ -1,6 +1,6 @@
 package com.example.tdd.adapter.out.redis
 
-import com.example.tdd.application.port.out.QueueManagerPort
+import com.example.tdd.application.port.out.QueueRepository
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Component
 import java.time.Instant
@@ -11,91 +11,63 @@ import java.time.Instant
 @Component
 class RedisQueueManagerAdapter(
     private val redisTemplate: RedisTemplate<String, String>
-) : QueueManagerPort {
+) : QueueRepository {
 
     companion object {
         private const val WAITING_QUEUE_KEY = "waiting-queue"
-        private const val ACTIVE_USERS_KEY = "active-users"
+        private const val ACTIVE_TOKENS_KEY = "active-tokens"
     }
 
-    /**
-     * 사용자를 대기열에 추가합니다.
-     * Redis Sorted Set을 활용하여 사용자를 추가하고 현재 순위를 반환합니다.
-     */
-    override fun addToQueue(userId: String): Int {
+    override fun addToQueue(userId: String, token: String): Long {
         val operations = redisTemplate.opsForZSet()
-
-        // 이미 대기열에 있는지 확인
-        val currentRank = operations.rank(WAITING_QUEUE_KEY, userId)
-        if (currentRank != null) {
-            // 이미 대기열에 있는 경우 현재 순위 반환 (0-based를 1-based로 변환)
-            return currentRank.toInt() + 1
-        }
-
+        
         // 현재 타임스탬프를 점수로 사용하여 시간 순으로 정렬
         val score = Instant.now().toEpochMilli().toDouble()
-        operations.add(WAITING_QUEUE_KEY, userId, score)
+        operations.add(WAITING_QUEUE_KEY, token, score)
 
-        // 새로 추가된 사용자의 순위 조회 (0-based를 1-based로 변환)
-        return operations.rank(WAITING_QUEUE_KEY, userId)?.toInt()?.plus(1) ?: -1
+        // 대기열 위치 반환 (1-based)
+        return getQueuePosition(token)
     }
 
-    /**
-     * 사용자의 현재 대기열 순번을 조회합니다.
-     */
-    override fun getQueuePosition(userId: String): Int? {
-        // 이미 활성화되었는지 확인
-        if (isActive(userId)) {
-            return null
+    override fun getQueuePosition(token: String): Long {
+        // 활성 토큰인지 확인
+        if (redisTemplate.opsForSet().isMember(ACTIVE_TOKENS_KEY, token) == true) {
+            return 0L
         }
 
         val operations = redisTemplate.opsForZSet()
-        // 대기열에서의 순위 조회 (0-based를 1-based로 변환)
-        return operations.rank(WAITING_QUEUE_KEY, userId)?.toInt()?.plus(1)
+        return operations.rank(WAITING_QUEUE_KEY, token)?.plus(1) ?: Long.MAX_VALUE
     }
 
-    /**
-     * 사용자가 활성 상태인지 확인합니다.
-     */
-    override fun isActive(userId: String): Boolean {
-        val operations = redisTemplate.opsForSet()
-        return operations.isMember(ACTIVE_USERS_KEY, userId) ?: false
-    }
-
-    /**
-     * 사용자를 활성 상태로 전환합니다.
-     */
-    override fun activateUser(userId: String): Boolean {
-        val operations = redisTemplate.opsForSet()
-        val added = operations.add(ACTIVE_USERS_KEY, userId) ?: 0
-        return added > 0
-    }
-
-    /**
-     * 사용자의 활성 상태를 해제합니다.
-     */
-    override fun deactivateUser(userId: String): Boolean {
-        val setOperations = redisTemplate.opsForSet()
+    override fun activateWaitingTokens(count: Int): List<String> {
         val zSetOperations = redisTemplate.opsForZSet()
-
-        // 활성 유저 목록에서 제거
-        val removed = setOperations.remove(ACTIVE_USERS_KEY, userId) ?: 0
-
-        // 대기열에서도 제거
-        zSetOperations.remove(WAITING_QUEUE_KEY, userId)
-
-        return removed > 0
+        val setOperations = redisTemplate.opsForSet()
+        
+        // 대기열에서 상위 N개 토큰 가져오기
+        val tokens = zSetOperations.range(WAITING_QUEUE_KEY, 0, count - 1L) ?: emptySet()
+        
+        val activatedTokens = mutableListOf<String>()
+        tokens.forEach { token ->
+            // 대기열에서 제거
+            zSetOperations.remove(WAITING_QUEUE_KEY, token)
+            // 활성 토큰으로 추가
+            setOperations.add(ACTIVE_TOKENS_KEY, token)
+            activatedTokens.add(token)
+        }
+        
+        return activatedTokens
     }
 
-    /**
-     * 대기열에서 다음 활성화할 사용자 목록을 가져옵니다.
-     */
-    override fun getNextActiveUsers(count: Int): List<String> {
-        val operations = redisTemplate.opsForZSet()
+    override fun removeFromQueue(token: String) {
+        redisTemplate.opsForZSet().remove(WAITING_QUEUE_KEY, token)
+        redisTemplate.opsForSet().remove(ACTIVE_TOKENS_KEY, token)
+    }
 
-        // 대기열의 상위 N명을 조회
-        val users = operations.range(WAITING_QUEUE_KEY, 0, count - 1.toLong())
+    override fun getQueueSize(): Long {
+        return redisTemplate.opsForZSet().size(WAITING_QUEUE_KEY) ?: 0L
+    }
 
-        return users?.toList() ?: emptyList()
+    override fun getActiveTokenCount(): Long {
+        return redisTemplate.opsForSet().size(ACTIVE_TOKENS_KEY) ?: 0L
     }
 }

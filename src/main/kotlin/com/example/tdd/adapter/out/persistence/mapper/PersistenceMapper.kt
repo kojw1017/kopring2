@@ -26,7 +26,7 @@ class PersistenceMapper {
     fun mapToDomainUser(entity: UserEntity): User {
         return User(
             userId = entity.userId,
-            _balance = entity.balance
+            balance = entity.balance
         )
     }
 
@@ -42,7 +42,9 @@ class PersistenceMapper {
         return Schedule(
             scheduleId = entity.scheduleId,
             concertName = entity.concertName,
-            concertDate = entity.concertDate
+            concertDate = entity.concertDate,
+            venue = entity.venue,
+            maxSeats = entity.maxSeats
         )
     }
 
@@ -50,7 +52,9 @@ class PersistenceMapper {
         return ScheduleEntity(
             scheduleId = domain.scheduleId,
             concertName = domain.concertName,
-            concertDate = domain.concertDate
+            concertDate = domain.concertDate,
+            venue = domain.venue,
+            maxSeats = domain.maxSeats
         )
     }
 
@@ -60,7 +64,7 @@ class PersistenceMapper {
             seatId = entity.seatId,
             scheduleId = entity.schedule.scheduleId,
             seatNumber = entity.seatNumber,
-            _status = mapToDomainSeatStatus(entity.status),
+            initialStatus = mapToDomainSeatStatus(entity.status),
             price = entity.price
         )
     }
@@ -81,7 +85,7 @@ class PersistenceMapper {
             reservationId = entity.reservationId,
             userId = entity.userId,
             seatId = entity.seat.seatId,
-            _status = mapToDomainReservationStatus(entity.status),
+            initialStatus = mapToDomainReservationStatus(entity.status),
             expiresAt = entity.expiresAt
         )
     }

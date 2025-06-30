@@ -1,6 +1,6 @@
 package com.example.tdd.adapter.out.redis
 
-import com.example.tdd.application.port.out.LockManagerPort
+import com.example.tdd.application.port.out.LockManagerRepository
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Component
 import java.util.concurrent.TimeUnit
@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 @Component
 class RedisLockManagerAdapter(
     private val redisTemplate: RedisTemplate<String, String>
-) : LockManagerPort {
+) : LockManagerRepository {
 
     companion object {
         private const val LOCK_PREFIX = "lock:"

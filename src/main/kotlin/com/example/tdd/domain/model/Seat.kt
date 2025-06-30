@@ -1,7 +1,8 @@
 package com.example.tdd.domain.model
 
-import com.example.tdd.adapter.`in`.web.exception.ConcurrentModificationException
-import com.example.tdd.adapter.`in`.web.exception.InvalidRequestException
+import com.example.tdd.domain.exception.SeatAlreadyReservedException
+import com.example.tdd.domain.exception.SeatAlreadySoldException
+import com.example.tdd.domain.exception.InvalidRequestException
 import java.math.BigDecimal
 
 /**
@@ -21,9 +22,11 @@ data class Seat(
     val seatId: Long,
     val scheduleId: Long,
     val seatNumber: Int,
-    private var _status: SeatStatus = SeatStatus.AVAILABLE,
+    val initialStatus: SeatStatus = SeatStatus.AVAILABLE,
     val price: BigDecimal
 ) {
+    private var _status: SeatStatus = initialStatus
+
     // 좌석 상태 getter
     val status: SeatStatus
         get() = _status
@@ -35,11 +38,11 @@ data class Seat(
 
     /**
      * 좌석을 임시 예약 상태로 변경합니다.
-     * @throws ConcurrentModificationException 이미 예약되었거나 판매된 좌석인 경우
+     * @throws SeatAlreadyReservedException 이미 예약되었거나 판매된 좌석인 경우
      */
     fun reserve() {
         if (_status != SeatStatus.AVAILABLE) {
-            throw ConcurrentModificationException("이미 예약되었거나 판매된 좌석입니다.")
+            throw SeatAlreadyReservedException("이미 예약되었거나 판매된 좌석입니다.")
         }
         _status = SeatStatus.RESERVED
     }
@@ -57,11 +60,11 @@ data class Seat(
 
     /**
      * 좌석 예약을 취소하고 상태를 예약 가능으로 변경합니다.
-     * @throws InvalidRequestException 좌석이 이미 판매된 경우
+     * @throws SeatAlreadySoldException 좌석이 이미 판매된 경우
      */
     fun cancelReservation() {
         if (_status == SeatStatus.SOLD) {
-            throw InvalidRequestException("이미 판매된 좌석은 예약 취소가 불가능합니다.")
+            throw SeatAlreadySoldException("이미 판매된 좌석은 예약 취소가 불가능합니다.")
         }
         _status = SeatStatus.AVAILABLE
     }

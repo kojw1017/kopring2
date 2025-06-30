@@ -1,15 +1,11 @@
 package com.example.tdd.adapter.`in`.web
 
-import com.example.tdd.adapter.`in`.web.exception.TokenException
-import com.example.tdd.application.port.`in`.PaymentCommand
 import com.example.tdd.application.port.`in`.PaymentUseCase
-import com.example.tdd.application.service.TokenProvider
+import com.example.tdd.application.port.`in`.ProcessPaymentCommand
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestHeader
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
+import java.math.BigDecimal
+import java.time.LocalDateTime
 
 /**
  * 결제 처리 컨트롤러
@@ -17,8 +13,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/payments")
 class PaymentController(
-    private val paymentUseCase: PaymentUseCase,
-    private val tokenProvider: TokenProvider
+    private val paymentUseCase: PaymentUseCase
 ) {
 
     /**
@@ -26,59 +21,86 @@ class PaymentController(
      */
     @PostMapping
     fun processPayment(
-        @RequestHeader("Authorization") authHeader: String,
-        @RequestBody request: PaymentRequest
-    ): ResponseEntity<PaymentResponse> {
-        // 토큰에서 사용자 ID 추출 (실제 구현에서는 JWT 검증 로직 필요)
-        val userId = extractUserId(authHeader)
-
-        // 결제 명령 생성
-        val command = PaymentCommand(
-            userId = userId,
-            reservationId = request.reservationId
+        @RequestBody request: ProcessPaymentRequest,
+        @RequestHeader("Authorization") token: String
+    ): ResponseEntity<PaymentDto> {
+        val command = ProcessPaymentCommand(
+            userId = request.userId,
+            reservationId = request.reservationId,
+            token = token.removePrefix("Bearer ")
         )
 
-        // 유스케이스 호출
-        val result = paymentUseCase.processPayment(command)
+        val payment = paymentUseCase.processPayment(command)
 
-        // 응답 생성
         return ResponseEntity.ok(
-            PaymentResponse(
-                paymentId = result.paymentId,
-                message = "결제가 성공적으로 완료되었습니다."
+            PaymentDto(
+                paymentId = payment.paymentId,
+                reservationId = payment.reservationId,
+                userId = payment.userId,
+                amount = payment.amount,
+                paymentDate = payment.paymentDate,
+                status = payment.status
             )
         )
     }
 
     /**
-     * 토큰에서 사용자 ID를 추출합니다.
-     * JWT 검증 및 클레임 추출 로직을 수행합니다.
+     * 결제 내역 조회 API
      */
-    private fun extractUserId(authHeader: String): String {
-        // "Bearer " 접두사 제거
-        val token = authHeader.replace("Bearer ", "")
+    @GetMapping("/{paymentId}")
+    fun getPayment(@PathVariable paymentId: Long): ResponseEntity<PaymentDto> {
+        val payment = paymentUseCase.getPayment(paymentId)
 
-        try {
-            // JWT 토큰 검증 및 클레임 추출
-            val claims = tokenProvider.validateToken(token)
-            return claims.subject
-        } catch (e: Exception) {
-            throw TokenException("유효하지 않은 토큰입니다.", path = "/api/payments")
-        }
+        return ResponseEntity.ok(
+            PaymentDto(
+                paymentId = payment.paymentId,
+                reservationId = payment.reservationId,
+                userId = payment.userId,
+                amount = payment.amount,
+                paymentDate = payment.paymentDate,
+                status = payment.status
+            )
+        )
+    }
+
+    /**
+     * 사용자 결제 내역 목록 조회 API
+     */
+    @GetMapping
+    fun getUserPayments(@RequestParam userId: String): ResponseEntity<List<PaymentDto>> {
+        val payments = paymentUseCase.getUserPayments(userId)
+
+        return ResponseEntity.ok(
+            payments.map { payment ->
+                PaymentDto(
+                    paymentId = payment.paymentId,
+                    reservationId = payment.reservationId,
+                    userId = payment.userId,
+                    amount = payment.amount,
+                    paymentDate = payment.paymentDate,
+                    status = payment.status
+                )
+            }
+        )
     }
 }
 
 /**
- * 결제 요청 DTO
+ * 결제 처리 요청 DTO
  */
-data class PaymentRequest(
+data class ProcessPaymentRequest(
+    val userId: String,
     val reservationId: Long
 )
 
 /**
- * 결제 응답 DTO
+ * 결제 정보 DTO
  */
-data class PaymentResponse(
+data class PaymentDto(
     val paymentId: Long,
-    val message: String
+    val reservationId: Long,
+    val userId: String,
+    val amount: BigDecimal,
+    val paymentDate: LocalDateTime,
+    val status: String
 )

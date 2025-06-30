@@ -1,29 +1,43 @@
 package com.example.tdd.adapter.`in`.web.exception
 
+import com.example.tdd.domain.exception.*
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.context.request.WebRequest
 import java.time.LocalDateTime
 
 /**
  * 글로벌 예외 처리 클래스
- * 애플리케이션에서 발생하는 모든 예외를 일관된 형식으로 처리합니다.
+ * 도메인 예외를 HTTP 응답으로 변환합니다.
  */
 @ControllerAdvice
 class GlobalExceptionHandler {
 
     /**
-     * 비즈니스 예외 처리
+     * 도메인 예외를 HTTP 예외로 변환
      */
-    @ExceptionHandler(BusinessException::class)
-    fun handleBusinessException(ex: BusinessException): ResponseEntity<ErrorResponse> {
+    @ExceptionHandler(DomainException::class)
+    fun handleDomainException(ex: DomainException, request: WebRequest): ResponseEntity<ErrorResponse> {
         val status = when (ex) {
-            is ResourceNotFoundException -> HttpStatus.NOT_FOUND
-            is InvalidRequestException -> HttpStatus.BAD_REQUEST
-            is ConcurrentModificationException -> HttpStatus.CONFLICT
+            is UserNotFoundException,
+            is ReservationNotFoundException,
+            is ConcertNotFoundException,
+            is ScheduleNotFoundException,
+            is SeatNotFoundException -> HttpStatus.NOT_FOUND
+
+            is InvalidRequestException,
             is InsufficientBalanceException -> HttpStatus.BAD_REQUEST
-            is TokenException -> HttpStatus.UNAUTHORIZED
+
+            is SeatAlreadyReservedException,
+            is SeatAlreadySoldException -> HttpStatus.CONFLICT
+
+            is ReservationExpiredException -> HttpStatus.GONE
+
+            is InvalidTokenException,
+            is TokenExpiredException -> HttpStatus.UNAUTHORIZED
+
             else -> HttpStatus.INTERNAL_SERVER_ERROR
         }
 
@@ -31,8 +45,8 @@ class GlobalExceptionHandler {
             timestamp = LocalDateTime.now(),
             status = status.value(),
             error = status.reasonPhrase,
-            message = ex.message,
-            path = ex.path ?: ""
+            message = ex.message ?: "도메인 오류가 발생했습니다.",
+            path = request.getDescription(false).removePrefix("uri=")
         )
 
         return ResponseEntity(errorResponse, status)
@@ -42,13 +56,13 @@ class GlobalExceptionHandler {
      * 일반 예외 처리
      */
     @ExceptionHandler(Exception::class)
-    fun handleException(ex: Exception): ResponseEntity<ErrorResponse> {
+    fun handleException(ex: Exception, request: WebRequest): ResponseEntity<ErrorResponse> {
         val errorResponse = ErrorResponse(
             timestamp = LocalDateTime.now(),
             status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
             error = HttpStatus.INTERNAL_SERVER_ERROR.reasonPhrase,
             message = "서버 내부 오류가 발생했습니다.",
-            path = ""
+            path = request.getDescription(false).removePrefix("uri=")
         )
 
         return ResponseEntity(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR)

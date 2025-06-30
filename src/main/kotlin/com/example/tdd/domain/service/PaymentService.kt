@@ -1,6 +1,8 @@
 package com.example.tdd.domain.service
 
-import com.example.tdd.adapter.`in`.web.exception.ReservationExpiredException
+import com.example.tdd.domain.exception.ReservationExpiredException
+import com.example.tdd.domain.exception.InvalidRequestException
+import com.example.tdd.domain.exception.InsufficientBalanceException
 import com.example.tdd.domain.model.Payment
 import com.example.tdd.domain.model.Reservation
 import com.example.tdd.domain.model.Seat

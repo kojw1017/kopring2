@@ -1,122 +1,95 @@
 package com.example.tdd.application.service
 
-import com.example.tdd.application.port.`in`.QueueStatus
-import com.example.tdd.application.port.`in`.QueueStatusResponse
 import com.example.tdd.application.port.`in`.QueueTokenUseCase
+import com.example.tdd.application.port.`in`.IssueTokenCommand
 import com.example.tdd.application.port.`in`.TokenResponse
-import com.example.tdd.application.port.out.QueueManagerPort
-import org.springframework.beans.factory.annotation.Value
+import com.example.tdd.application.port.`in`.TokenStatusResponse
+import com.example.tdd.application.port.`in`.TokenActivationResult
+import com.example.tdd.application.port.out.QueueTokenRepository
+import com.example.tdd.application.port.out.QueueRepository
+import com.example.tdd.domain.exception.InvalidTokenException
 import org.springframework.stereotype.Service
-import java.util.*
+import org.springframework.transaction.annotation.Transactional
 
 /**
- * 토큰 발급 및 대기열 관리 서비스
+ * 큐 토큰 관리 애플리케이션 서비스
  */
 @Service
 class QueueTokenService(
-    private val queueManager: QueueManagerPort,
-    private val tokenProvider: TokenProvider,
-    @Value("\${queue.active-user-limit}")
-    private val activeUserLimit: Int
+    private val queueTokenRepository: QueueTokenRepository,
+    private val queueRepository: QueueRepository
 ) : QueueTokenUseCase {
 
-    /**
-     * 사용자 대기열 토큰을 발급합니다.
-     */
-    override fun issueToken(userId: String): TokenResponse {
-        // 사용자가 이미 활성 상태인지 확인
-        val isActive = queueManager.isActive(userId)
-
-        // 사용자를 대기열에 추가하고 순번을 가져옴 (이미 있으면 기존 순번 반환)
-        val queuePosition = if (!isActive) queueManager.addToQueue(userId) else null
-
-        // 활성 상태가 아니고 대기열 순번이 활성화 제한 내에 있으면 활성화
-        if (!isActive && queuePosition != null && queuePosition <= activeUserLimit) {
-            queueManager.activateUser(userId)
+    @Transactional
+    override fun issueToken(command: IssueTokenCommand): TokenResponse {
+        // 기존 활성 토큰 확인
+        val existingTokens = queueTokenRepository.findActiveTokensByUserId(command.userId)
+        if (existingTokens.isNotEmpty()) {
+            val token = existingTokens.first()
+            val position = queueRepository.getQueuePosition(token)
+            return TokenResponse(
+                token = token,
+                queuePosition = position,
+                estimatedWaitTime = calculateEstimatedWaitTime(position),
+                isActive = position == 0L
+            )
         }
 
-        // 토큰 생성
-        val status = if (isActive || (queuePosition != null && queuePosition <= activeUserLimit)) {
-            QueueStatus.ACTIVE
-        } else {
-            QueueStatus.WAITING
-        }
-
-        val token = tokenProvider.createToken(userId, status)
-        val expiresIn = tokenProvider.getTokenValidity(status)
+        // 새 토큰 발급
+        val token = queueTokenRepository.generateToken(command.userId)
+        val position = queueRepository.addToQueue(command.userId, token)
 
         return TokenResponse(
             token = token,
-            status = status,
-            rank = queuePosition,
-            expiresIn = expiresIn
+            queuePosition = position,
+            estimatedWaitTime = calculateEstimatedWaitTime(position),
+            isActive = position == 0L
         )
     }
 
-    /**
-     * 사용자의 대기열 상태를 조회합니다.
-     */
-    override fun getQueueStatus(token: String): QueueStatusResponse {
-        // 토큰 검증 및 사용자 ID 추출
-        val claims = tokenProvider.validateToken(token)
-        val userId = claims.subject
-
-        // 대기열 상태 확인
-        val isActive = queueManager.isActive(userId)
-        val queuePosition = queueManager.getQueuePosition(userId)
-
-        // 대기열 상태에 따른 응답 생성
-        val status = if (isActive) {
-            QueueStatus.ACTIVE
-        } else if (queuePosition != null) {
-            QueueStatus.WAITING
-        } else {
-            QueueStatus.EXPIRED
+    @Transactional(readOnly = true)
+    override fun getTokenStatus(token: String): TokenStatusResponse {
+        val isValid = queueTokenRepository.isValidToken(token)
+        if (!isValid) {
+            throw InvalidTokenException("유효하지 않은 토큰입니다.")
         }
 
-        // 활성화 예상 시간 계산 (대기열 위치에 따라 대략적으로 계산)
-        val estimatedActivationTime = if (queuePosition != null && queuePosition > activeUserLimit) {
-            val waitingUsers = queuePosition - activeUserLimit
-            // 대략 10초당 1명 활성화된다고 가정
-            waitingUsers * 10L
-        } else {
-            null
-        }
+        val position = queueRepository.getQueuePosition(token)
+        val ttl = queueTokenRepository.getTokenTtl(token)
 
-        return QueueStatusResponse(
-            userId = userId,
-            status = status,
-            rank = queuePosition,
-            estimatedActivationTime = estimatedActivationTime
+        return TokenStatusResponse(
+            token = token,
+            isValid = true,
+            isActive = position == 0L,
+            queuePosition = position,
+            estimatedWaitTime = calculateEstimatedWaitTime(position),
+            ttl = ttl
         )
     }
-}
 
-/**
- * 토큰 관리를 위한 인터페이스
- */
-interface TokenProvider {
-    /**
-     * 토큰을 생성합니다.
-     */
-    fun createToken(userId: String, status: QueueStatus): String
+    @Transactional
+    override fun activateWaitingTokens(): TokenActivationResult {
+        val activeTokenCount = queueRepository.getActiveTokenCount()
+        val maxActiveTokens = 100L // 최대 활성 토큰 수
 
-    /**
-     * 토큰을 검증하고 클레임을 반환합니다.
-     */
-    fun validateToken(token: String): Claims
+        val availableSlots = maxActiveTokens - activeTokenCount
+        if (availableSlots <= 0) {
+            return TokenActivationResult(0, queueRepository.getQueueSize())
+        }
 
-    /**
-     * 토큰 유효 시간을 반환합니다.
-     */
-    fun getTokenValidity(status: QueueStatus): Int
-}
+        val activatedTokens = queueRepository.activateWaitingTokens(availableSlots.toInt())
+        activatedTokens.forEach { token ->
+            queueTokenRepository.activateToken(token)
+        }
 
-/**
- * JWT 클레임을 위한 간단한 인터페이스
- */
-interface Claims {
-    val subject: String
-    val expiration: Date
-    fun get(key: String): Any?
+        return TokenActivationResult(
+            activatedCount = activatedTokens.size,
+            totalWaitingCount = queueRepository.getQueueSize()
+        )
+    }
+
+    private fun calculateEstimatedWaitTime(position: Long): Long {
+        // 1분에 10명씩 처리된다고 가정
+        return if (position <= 0) 0L else (position * 6) // 초 단위
+    }
 }

@@ -1,7 +1,7 @@
 package com.example.tdd.domain.model
 
-import com.example.tdd.adapter.`in`.web.exception.InsufficientBalanceException
-import com.example.tdd.adapter.`in`.web.exception.InvalidRequestException
+import com.example.tdd.domain.exception.InsufficientBalanceException
+import com.example.tdd.domain.exception.InvalidRequestException
 import java.math.BigDecimal
 
 /**
@@ -10,8 +10,10 @@ import java.math.BigDecimal
  */
 class User(
     val userId: String,
-    private var _balance: BigDecimal = BigDecimal.ZERO
+    balance: BigDecimal = BigDecimal.ZERO
 ) {
+    private var _balance: BigDecimal = balance
+
     val balance: BigDecimal
         get() = _balance
 

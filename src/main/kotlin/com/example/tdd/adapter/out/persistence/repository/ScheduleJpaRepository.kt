@@ -12,6 +12,6 @@ interface ScheduleJpaRepository : JpaRepository<ScheduleEntity, Long> {
     /**
      * 현재 시간 이후의 사용 가능한 모든 콘서트 일정을 조회합니다.
      */
-    @Query("SELECT s FROM ScheduleEntity s WHERE s.concertDate > :now ORDER BY s.concertDate ASC")
-    fun findAllAvailableSchedules(now: LocalDateTime = LocalDateTime.now()): List<ScheduleEntity>
+    @Query("SELECT s FROM ScheduleEntity s WHERE s.concertDate > :currentTime ORDER BY s.concertDate ASC")
+    fun findAvailableSchedules(currentTime: LocalDateTime): List<ScheduleEntity>
 }

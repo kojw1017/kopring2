@@ -1,7 +1,7 @@
 package com.example.tdd.domain.model
 
-import com.example.tdd.adapter.`in`.web.exception.InvalidRequestException
-import com.example.tdd.adapter.`in`.web.exception.ReservationExpiredException
+import com.example.tdd.domain.exception.InvalidRequestException
+import com.example.tdd.domain.exception.ReservationExpiredException
 import java.time.LocalDateTime
 
 /**
@@ -21,9 +21,11 @@ data class Reservation(
     val reservationId: Long,
     val userId: String,
     val seatId: Long,
-    private var _status: ReservationStatus = ReservationStatus.PENDING,
+    val initialStatus: ReservationStatus = ReservationStatus.PENDING,
     val expiresAt: LocalDateTime
 ) {
+    private var _status: ReservationStatus = initialStatus
+
     // 예약 상태 getter
     val status: ReservationStatus
         get() = _status

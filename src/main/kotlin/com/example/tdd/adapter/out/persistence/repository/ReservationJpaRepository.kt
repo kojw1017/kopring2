@@ -34,4 +34,14 @@ interface ReservationJpaRepository : JpaRepository<ReservationEntity, Long> {
     @Modifying
     @Query("UPDATE ReservationEntity r SET r.status = :status WHERE r.reservationId = :reservationId")
     fun updateStatus(reservationId: Long, status: ReservationStatusEntity): Int
+
+    /**
+     * 상태별 예약 목록을 조회합니다.
+     */
+    fun findByStatus(status: ReservationStatusEntity): List<ReservationEntity>
+
+    /**
+     * 예약 ID로 예약을 조회합니다.
+     */
+    fun findByReservationId(reservationId: Long): ReservationEntity?
 }
