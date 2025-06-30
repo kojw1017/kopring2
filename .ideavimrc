@@ -1,0 +1,103 @@
+" 기본 설정
+set showmatch           " 괄호 짝 표시
+set incsearch           " 검색 시 결과 즉시 표시
+set hlsearch            " 검색 결과 강조
+set ignorecase          " 검색 시 대소문자 무시
+set smartcase           " 대문자가 포함된 경우 대소문자 구분
+set backspace=indent,eol,start " 백스페이스 동작 설정
+
+" 들여쓰기 설정
+set autoindent          " 자동 들여쓰기
+set smartindent         " 스마트 들여쓰기
+set tabstop=4           " 탭 간격 4칸
+set shiftwidth=4        " 자동 들여쓰기 간격 4칸
+set expandtab           " 탭을 스페이스로 변환
+
+" 상태바 설정
+set laststatus=2        " 항상 상태바 표시
+
+" 커서 이동 향상
+set relativenumber      " 상대적 줄 번호 표시 (현재 줄 기준)
+set number              " 현재 줄의 절대 번호 표시
+
+" 키 매핑
+" ESC 대신 jj 사용
+inoremap jj <Esc>
+
+" 창 이동 단축키
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" 자주 사용하는 명령어 단축키
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <leader>wq :wq<CR>
+
+" 검색 후 하이라이트 끄기
+nnoremap <leader><space> :nohlsearch<CR>
+
+" IntelliJ 통합 기능
+set ideajoin            " Join 명령이 IntelliJ의 smart join 사용
+set idearefactormode=keep  " 리팩토링 모드
+set ideavimsupport=dialog  " 다이얼로그 지원
+
+" 더 빠른 이동을 위한 설정
+" 화면 중앙에 커서 유지
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
+nnoremap n nzzzv
+nnoremap N Nzzzv
+
+" 코드 블록 이동 (괄호, 블록 등)
+map [[ ?{<CR>w99[{
+map ][ /}<CR>b99]}
+map ]] j0[[%/{<CR>
+map [] k$][%?}<CR>
+
+" IntelliJ 액션 호출
+nnoremap <leader>r :action Run<CR>
+nnoremap <leader>d :action Debug<CR>
+nnoremap <leader>f :action FindInPath<CR>
+nnoremap <leader>e :action RecentFiles<CR>
+nnoremap <leader>t :action GotoTest<CR>
+nnoremap <leader>b :action ToggleLineBreakpoint<CR>
+
+" 텍스트 편집 향상을 위한 추가 설정
+" 클립보드와 vim 레지스터 연동
+set clipboard+=unnamed
+set clipboard+=ideaput
+
+" 선택 영역 들여쓰기 후 선택 상태 유지
+vnoremap < <gv
+vnoremap > >gv
+
+" Y를 y$처럼 동작하게 설정 (D와 C의 일관성을 위해)
+nnoremap Y y$
+
+" 커서 라인 하이라이트
+set cursorline
+
+" 빠른 텍스트 수정을 위한 매핑
+" 현재 라인 복제
+nnoremap <leader>d yyp
+
+" 현재 단어를 * 검색
+nnoremap <leader>* viw"*y/<C-r>*<CR>
+
+" 마지막 편집 위치로 이동
+nnoremap <leader>. `.
+
+" 코드 접기 단축키
+nnoremap <leader>z za
+
+" 문단 형식 맞추기
+nnoremap <leader>gq gqip
+
+" IntelliJ의 코드 액션 호출
+nnoremap <leader>a :action ShowIntentionActions<CR>
+nnoremap <leader>i :action OptimizeImports<CR>
+nnoremap <leader>r :action RenameElement<CR>
+nnoremap <leader>m :action ExtractMethod<CR>
+nnoremap <leader>v :action IntroduceVariable<CR>
