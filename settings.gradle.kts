@@ -1,4 +1,5 @@
 rootProject.name = "tdd"
+<<<<<<< HEAD
 
 pluginManagement {
     val kotlinVersion = "1.9.20"
@@ -26,3 +27,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
+=======
+>>>>>>> 81cbb449748bf89435a8e88a889ebd40241c94bd
