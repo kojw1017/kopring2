@@ -1,11 +1,11 @@
-package hello.kopring2
+package tdd
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class Kopring2Application
+class TddApplication
 
 fun main(args: Array<String>) {
-    runApplication<Kopring2Application>(*args)
+    runApplication<TddApplication>(*args)
 }
