@@ -15,6 +15,7 @@ import com.example.tdd.application.port.out.SeatRepositoryPort
 import com.example.tdd.application.port.out.UserRepositoryPort
 import com.example.tdd.domain.model.ReservationStatus
 import com.example.tdd.domain.service.PaymentService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.concurrent.TimeUnit
@@ -34,61 +35,57 @@ class PaymentProcessingService(
     private val lockManager: LockManagerPort
 ) : PaymentUseCase {
 
+    private val log = LoggerFactory.getLogger(this::class.java)
+
     /**
      * 예약에 대한 결제를 진행합니다.
-     *
-     * @throws ConcurrentModificationException 다른 결제 시도가 진행 중인 경우
-     * @throws ResourceNotFoundException 예약, 사용자, 좌석 정보를 찾을 수 없는 경우
-     * @throws InvalidRequestException 예약자와 결제 요청자가 불일치하거나 이미 결제된 경우
-     * @throws ReservationExpiredException 예약이 만료된 경우
      */
     @Transactional
     override fun processPayment(command: PaymentCommand): PaymentResponse {
         val lockKey = "payment:${command.reservationId}"
         val ownerId = command.userId
 
-        // 분산 락 획득 시도 (3초 타임아웃)
-        val lockAcquired = lockManager.acquireLock(lockKey, ownerId, TimeUnit.SECONDS.toMillis(3))
+        log.info("결제 시도: userId={}, reservationId={}", command.userId, command.reservationId)
 
-        if (!lockAcquired) {
+        if (!lockManager.acquireLock(lockKey, ownerId, TimeUnit.SECONDS.toMillis(3))) {
+            log.warn("결제 락 획득 실패: 다른 결제 시도 진행 중. lockKey={}", lockKey)
             throw ConcurrentModificationException(
                 "현재 해당 예약에 대한 다른 결제 시도가 진행 중입니다. 잠시 후 다시 시도해주세요.",
                 path = "/api/payments"
             )
         }
 
+        log.debug("결제 락 획득 성공: lockKey={}", lockKey)
+
         try {
-            // 예약 정보 조회
             val reservation = reservationRepository.findById(command.reservationId)
                 ?: throw ResourceNotFoundException("유효하지 않은 예약입니다.", path = "/api/payments")
+            log.debug("예약 정보 조회 성공: reservationId={}", reservation.reservationId)
 
-            // 예약자와 결제 요청자가 일치하는지 확인
             if (reservation.userId != command.userId) {
+                log.warn("결제 권한 없음: reservation.userId={}, command.userId={}", reservation.userId, command.userId)
                 throw InvalidRequestException("해당 예약에 대한 결제 권한이 없습니다.", path = "/api/payments")
             }
 
-            // 예약 만료 여부 확인
             if (reservation.isExpired()) {
+                log.warn("결제 실패: 예약 만료. reservationId={}, expiresAt={}", reservation.reservationId, reservation.expiresAt)
                 throw ReservationExpiredException("예약이 만료되었습니다. 다시 예약해주세요.", path = "/api/payments")
             }
 
-            // 이미 결제된 예약인지 확인
             if (reservation.status == ReservationStatus.PAID) {
+                log.warn("결제 실패: 이미 결제 완료된 예약. reservationId={}", reservation.reservationId)
                 throw InvalidRequestException("이미 결제가 완료된 예약입니다.", path = "/api/payments")
             }
 
-            // 사용자와 좌석 정보 조회
             val user = userRepository.findByUserId(command.userId)
                 ?: throw ResourceNotFoundException("사용자 정보를 찾을 수 없습니다.", path = "/api/payments")
-
             val seat = seatRepository.findById(reservation.seatId)
                 ?: throw ResourceNotFoundException("좌석 정보를 찾을 수 없습니다.", path = "/api/payments")
+            log.debug("사용자 및 좌석 정보 조회 성공: userId={}, seatId={}", user.userId, seat.seatId)
 
-            // 결제 ID 생성 (실제 구현에서는 DB 시퀀스 등을 사용)
             val paymentId = System.currentTimeMillis()
 
-            // 도메인 서비스를 통한 결제 처리
-            // 여기서 InsufficientBalanceException, InvalidRequestException 등이 발생할 수 있음
+            log.info("도메인 서비스 호출: processPayment. userId={}, reservationId={}, seatPrice={}", user.userId, reservation.reservationId, seat.price)
             val payment = paymentService.processPayment(
                 user = user,
                 reservation = reservation,
@@ -96,21 +93,25 @@ class PaymentProcessingService(
                 paymentId = paymentId
             )
 
-            // 저장소에 결제 정보 저장
             val savedPayment = paymentRepository.save(payment)
+            log.info("결제 정보 저장 성공: paymentId={}", savedPayment.paymentId)
 
-            // 사용자 대기열 상태 비활성화 (이미 좌석을 예약했으므로)
             queueManager.deactivateUser(command.userId)
+            log.info("사용자 대기열 비활성화: userId={}", command.userId)
 
+            log.info("결제 성공: paymentId={}, reservationId={}", savedPayment.paymentId, savedPayment.reservationId)
             return PaymentResponse(
                 paymentId = savedPayment.paymentId,
                 reservationId = savedPayment.reservationId,
                 amount = savedPayment.amount,
                 status = "COMPLETED"
             )
+        } catch (e: Exception) {
+            log.error("결제 처리 중 예외 발생: reservationId={}", command.reservationId, e)
+            throw e
         } finally {
-            // 락 해제
             lockManager.releaseLock(lockKey, ownerId)
+            log.debug("결제 락 해제: lockKey={}", lockKey)
         }
     }
 }

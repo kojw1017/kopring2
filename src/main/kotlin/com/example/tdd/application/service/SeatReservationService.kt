@@ -9,6 +9,7 @@ import com.example.tdd.application.port.out.LockManagerPort
 import com.example.tdd.application.port.out.ReservationRepositoryPort
 import com.example.tdd.application.port.out.SeatRepositoryPort
 import com.example.tdd.domain.service.ReservationService
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -28,6 +29,8 @@ class SeatReservationService(
     private val tempReservationMinutes: Int
 ) : SeatReservationUseCase {
 
+    private val log = LoggerFactory.getLogger(this::class.java)
+
     /**
      * 좌석 예약을 요청합니다.
      * 분산 락을 사용하여 동시 예약을 방지합니다.
@@ -40,13 +43,16 @@ class SeatReservationService(
         val lockKey = "seat:${command.scheduleId}:${command.seatNumber}"
         val ownerId = command.userId
 
-        // 분산 락 획득 시도 (3초 타임아웃)
-        val lockAcquired = lockManager.acquireLock(lockKey, ownerId, TimeUnit.SECONDS.toMillis(3))
+        log.info("좌석 예약 시도: userId={}, scheduleId={}, seatNumber={}", command.userId, command.scheduleId, command.seatNumber)
 
-        if (!lockAcquired) {
+        // 분산 락 획득 시도 (3초 타임아웃)
+        if (!lockManager.acquireLock(lockKey, ownerId, TimeUnit.SECONDS.toMillis(3))) {
+            log.warn("락 획득 실패: 다른 사용자가 좌석 선택 중. lockKey={}", lockKey)
             throw ConcurrentModificationException("현재 다른 사용자가 해당 좌석을 선택 중입니다. 잠시 후 다시 시도해주세요.",
                 path = "/api/reservations")
         }
+
+        log.debug("락 획득 성공: lockKey={}", lockKey)
 
         try {
             // 좌석 조회
@@ -57,7 +63,6 @@ class SeatReservationService(
             val reservationId = System.currentTimeMillis()
 
             // 도메인 서비스를 통한 좌석 예약
-            // ConcurrentModificationException이 발생할 수 있음 (이미 예약된 좌석)
             val reservation = reservationService.reserveSeat(
                 userId = command.userId,
                 seat = seat,
@@ -69,15 +74,21 @@ class SeatReservationService(
             val savedReservation = reservationRepository.save(reservation)
             val updatedSeat = seatRepository.save(seat)
 
+            log.info("좌석 예약 성공: reservationId={}, userId={}, seatId={}", savedReservation.reservationId, savedReservation.userId, updatedSeat.seatId)
+
             return ReservationResponse(
                 reservationId = savedReservation.reservationId,
                 seatNumber = updatedSeat.seatNumber,
                 status = savedReservation.status.name,
                 expiresAt = savedReservation.expiresAt
             )
+        } catch (e: Exception) {
+            log.error("좌석 예약 처리 중 예외 발생: userId={}, seatNumber={}", command.userId, command.seatNumber, e)
+            throw e // 예외를 다시 던져 GlobalExceptionHandler에서 처리하도록 함
         } finally {
             // 락 해제
             lockManager.releaseLock(lockKey, ownerId)
+            log.debug("락 해제: lockKey={}", lockKey)
         }
     }
 }

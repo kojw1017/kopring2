@@ -1,6 +1,7 @@
 package com.example.tdd.adapter.out.redis
 
 import com.example.tdd.application.port.out.LockManagerPort
+import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Component
 import java.util.concurrent.TimeUnit
@@ -13,6 +14,8 @@ class RedisLockManagerAdapter(
     private val redisTemplate: RedisTemplate<String, String>
 ) : LockManagerPort {
 
+    private val log = LoggerFactory.getLogger(this::class.java)
+
     companion object {
         private const val LOCK_PREFIX = "lock:"
     }
@@ -22,13 +25,18 @@ class RedisLockManagerAdapter(
      */
     override fun acquireLock(resourceId: String, ownerId: String, timeoutMs: Long): Boolean {
         val lockKey = LOCK_PREFIX + resourceId
-        val operations = redisTemplate.opsForValue()
-
-        // SET NX (Not exists) 명령어를 사용하여 락 획득 시도
-        // 이미 키가 존재하면 false를 반환하고, 없으면 값 설정 후 true 반환
-        val success = operations.setIfAbsent(lockKey, ownerId, timeoutMs, TimeUnit.MILLISECONDS) ?: false
-
-        return success
+        return try {
+            val success = redisTemplate.opsForValue().setIfAbsent(lockKey, ownerId, timeoutMs, TimeUnit.MILLISECONDS) ?: false
+            if (success) {
+                log.debug("Redis 락 획득 성공: key='{}', owner='{}'", lockKey, ownerId)
+            } else {
+                log.warn("Redis 락 획득 실패: key='{}'가 이미 존재합니다.", lockKey)
+            }
+            success
+        } catch (e: Exception) {
+            log.error("Redis 락 획득 중 예외 발생: key='{}'", lockKey, e)
+            false
+        }
     }
 
     /**
@@ -36,17 +44,23 @@ class RedisLockManagerAdapter(
      */
     override fun releaseLock(resourceId: String, ownerId: String): Boolean {
         val lockKey = LOCK_PREFIX + resourceId
-        val operations = redisTemplate.opsForValue()
+        return try {
+            val currentOwner = redisTemplate.opsForValue().get(lockKey)
 
-        // 현재 락 소유자 확인
-        val currentOwner = operations.get(lockKey)
-
-        // 현재 락 소유자가 요청자와 일치하는 경우에만 락 해제
-        if (currentOwner == ownerId) {
-            redisTemplate.delete(lockKey)
-            return true
+            if (currentOwner == ownerId) {
+                redisTemplate.delete(lockKey)
+                log.debug("Redis 락 해제 성공: key='{}', owner='{}'", lockKey, ownerId)
+                true
+            } else if (currentOwner != null) {
+                log.warn("Redis 락 해제 실패: 소유자가 일치하지 않음. key='{}', expectedOwner='{}', actualOwner='{}'", lockKey, ownerId, currentOwner)
+                false
+            } else {
+                log.warn("Redis 락 해제 실패: 락이 존재하지 않음. key='{}'", lockKey)
+                false
+            }
+        } catch (e: Exception) {
+            log.error("Redis 락 해제 중 예외 발생: key='{}'", lockKey, e)
+            false
         }
-
-        return false
     }
 }
