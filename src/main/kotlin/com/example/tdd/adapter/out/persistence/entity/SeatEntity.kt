@@ -52,9 +52,11 @@ class SeatEntity(
         return when (status) {
             SeatStatus.AVAILABLE -> seat
             SeatStatus.TEMPORARY_RESERVED -> {
-                if (reservedBy != null) {
+                // reservedBy의 지역 변수를 생성하여 스마트 캐스트 문제 해결
+                val userId = reservedBy
+                if (userId != null) {
                     val temporaryReserved = seat.temporaryReserve(
-                        userId = reservedBy,
+                        userId = userId,
                         temporaryReservationMinutes = if (temporaryReservationExpiresAt != null) {
                             val duration = java.time.Duration.between(LocalDateTime.now(), temporaryReservationExpiresAt)
                             duration.toMinutes().toInt().coerceAtLeast(1)
@@ -68,9 +70,11 @@ class SeatEntity(
                 }
             }
             SeatStatus.RESERVED -> {
-                if (reservedBy != null) {
+                // reservedBy의 지역 변수를 생성하여 스마트 캐스트 문제 해결
+                val userId = reservedBy
+                if (userId != null) {
                     val temporaryReserved = seat.temporaryReserve(
-                        userId = reservedBy,
+                        userId = userId,
                         temporaryReservationMinutes = 5 // 임의 값
                     )
                     temporaryReserved.confirmReservation()

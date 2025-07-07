@@ -2,11 +2,15 @@ package com.example.tdd.adapter.out.redis
 
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.util.concurrent.TimeUnit
 import java.util.function.Supplier
 
 @Component
+@ConditionalOnBean(RedissonClient::class)
+@ConditionalOnProperty(name = ["spring.redis.enabled"], havingValue = "true", matchIfMissing = false)
 class RedisLockManager(
     private val redissonClient: RedissonClient
 ) {

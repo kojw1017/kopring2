@@ -6,7 +6,7 @@ package com.example.tdd.application.exception
 abstract class ApplicationException(
     val errorCode: ErrorCode,
     override val message: String,
-    val cause: Throwable? = null
+    override val cause: Throwable? = null
 ) : RuntimeException(message, cause)
 
 /**
