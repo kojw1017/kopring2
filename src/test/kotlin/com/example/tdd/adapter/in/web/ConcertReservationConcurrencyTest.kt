@@ -1,9 +1,7 @@
 package com.example.tdd.adapter.`in`.web
 
-import com.example.tdd.IntegrationTest
 import com.example.tdd.adapter.out.redis.RedisLockManager
 import com.example.tdd.application.port.`in`.QueueTokenResponse
-import com.example.tdd.application.port.`in`.ReserveSeatRequest
 import com.example.tdd.domain.model.ConcertDate
 import com.example.tdd.domain.model.Seat
 import com.example.tdd.domain.repository.ConcertDateRepository
@@ -15,6 +13,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.web.servlet.MockMvc
@@ -26,9 +25,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+@SpringBootTest
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
-class ConcertReservationConcurrencyTest : IntegrationTest() {
+class ConcertReservationConcurrencyTest {
 
     @Autowired
     private lateinit var mockMvc: MockMvc

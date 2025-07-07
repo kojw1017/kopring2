@@ -19,7 +19,7 @@ java {
 
 repositories {
 	mavenCentral()
-	google()
+	maven { url = uri("https://repo.spring.io/milestone") }
 }
 
 allOpen {
@@ -35,32 +35,39 @@ noArg {
 }
 
 dependencies {
+	// 필수 스프링 의존성
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
+
+	// 대기열 관리를 위한 Redis
 	implementation("org.springframework.boot:spring-boot-starter-data-redis")
 	implementation("org.redisson:redisson-spring-boot-starter:3.23.5")
+
+	// Kotlin 지원
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+
+	// JWT 토큰 관리
 	implementation("io.jsonwebtoken:jjwt-api:0.11.5")
 	implementation("io.jsonwebtoken:jjwt-impl:0.11.5")
 	implementation("io.jsonwebtoken:jjwt-jackson:0.11.5")
+
+	// API 문서화
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
 
+	// 개발 도구
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 
+	// 데이터베이스
 	runtimeOnly("com.h2database:h2")
 
+	// 테스트 도구
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
-	testImplementation("io.mockk:mockk:1.13.10")
-	testImplementation("org.testcontainers:junit-jupiter:1.19.8")
-	testImplementation("org.testcontainers:redis:1.19.8")
-	testImplementation("org.testcontainers:mysql:1.19.8")
+	testImplementation("com.github.codemonstur:embedded-redis:1.0.0")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
