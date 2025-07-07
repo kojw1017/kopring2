@@ -1,22 +1,33 @@
 package com.example.tdd.adapter.out.persistence.entity
 
-import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
-import java.math.BigDecimal
+import java.util.UUID
 
-/**
- * 사용자 엔티티
- * 데이터베이스의 USERS 테이블과 매핑됩니다.
- */
 @Entity
-@Table(name = "USERS")
+@Table(name = "users")
 class UserEntity(
     @Id
-    @Column(name = "user_id")
-    val userId: String,
+    val id: UUID,
 
-    @Column(name = "balance", nullable = false)
-    var balance: BigDecimal = BigDecimal.ZERO
-)
+    val balance: Long
+) {
+    companion object {
+        fun fromDomain(domain: com.example.tdd.domain.model.User): UserEntity {
+            return UserEntity(
+                id = domain.id,
+                balance = domain.balance
+            )
+        }
+    }
+
+    fun toDomain(): com.example.tdd.domain.model.User {
+        return com.example.tdd.domain.model.User.of(
+            id = id,
+            balance = balance
+        )
+    }
+}

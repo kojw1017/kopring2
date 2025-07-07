@@ -1,14 +1,14 @@
 package com.example.tdd.adapter.out.persistence.repository
 
 import com.example.tdd.adapter.out.persistence.entity.PaymentEntity
+import com.example.tdd.domain.model.PaymentStatus
 import org.springframework.data.jpa.repository.JpaRepository
+import java.util.UUID
 
-/**
- * 결제 JPA 리포지토리
- */
-interface PaymentJpaRepository : JpaRepository<PaymentEntity, Long> {
-    /**
-     * 예약 ID로 결제 정보를 조회합니다.
-     */
-    fun findByReservationReservationId(reservationId: Long): PaymentEntity?
+interface PaymentJpaRepository : JpaRepository<PaymentEntity, UUID> {
+    fun findAllByUserId(userId: UUID): List<PaymentEntity>
+
+    fun findBySeatId(seatId: UUID): PaymentEntity?
+
+    fun findBySeatIdAndStatus(seatId: UUID, status: PaymentStatus): PaymentEntity?
 }

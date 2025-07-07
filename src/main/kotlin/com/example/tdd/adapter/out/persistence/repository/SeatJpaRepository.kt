@@ -1,31 +1,19 @@
 package com.example.tdd.adapter.out.persistence.repository
 
 import com.example.tdd.adapter.out.persistence.entity.SeatEntity
-import com.example.tdd.adapter.out.persistence.entity.SeatStatusEntity
+import com.example.tdd.domain.model.SeatStatus
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import java.time.LocalDateTime
+import java.util.UUID
 
-/**
- * 좌석 JPA 리포지토리
- */
-interface SeatJpaRepository : JpaRepository<SeatEntity, Long> {
-    /**
-     * 특정 일정의 모든 좌석을 조회합니다.
-     */
-    @Query("SELECT s FROM SeatEntity s WHERE s.schedule.scheduleId = :scheduleId ORDER BY s.seatNumber ASC")
-    fun findAllByScheduleId(scheduleId: Long): List<SeatEntity>
+interface SeatJpaRepository : JpaRepository<SeatEntity, UUID> {
+    fun findByConcertDateIdAndSeatNumber(concertDateId: UUID, seatNumber: Int): SeatEntity?
 
-    /**
-     * 특정 일정과 좌석 번호로 좌석을 조회합니다.
-     */
-    @Query("SELECT s FROM SeatEntity s WHERE s.schedule.scheduleId = :scheduleId AND s.seatNumber = :seatNumber")
-    fun findByScheduleIdAndSeatNumber(scheduleId: Long, seatNumber: Int): SeatEntity?
+    fun findAllByConcertDateId(concertDateId: UUID): List<SeatEntity>
 
-    /**
-     * 좌석 상태를 업데이트합니다.
-     */
-    @Modifying
-    @Query("UPDATE SeatEntity s SET s.status = :status WHERE s.seatId = :seatId")
-    fun updateStatus(seatId: Long, status: SeatStatusEntity): Int
+    fun findAllByConcertDateIdAndStatus(concertDateId: UUID, status: SeatStatus): List<SeatEntity>
+
+    @Query("SELECT s FROM SeatEntity s WHERE s.status = com.example.tdd.domain.model.SeatStatus.TEMPORARY_RESERVED AND s.temporaryReservationExpiresAt < :now")
+    fun findAllExpiredTemporaryReservations(now: LocalDateTime = LocalDateTime.now()): List<SeatEntity>
 }

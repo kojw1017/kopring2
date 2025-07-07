@@ -1,50 +1,83 @@
 package com.example.tdd.adapter.out.persistence.entity
 
-import jakarta.persistence.Column
+import com.example.tdd.domain.model.SeatStatus
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
-import jakarta.persistence.FetchType
-import jakarta.persistence.GeneratedValue
-import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
-import jakarta.persistence.JoinColumn
-import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
-import java.math.BigDecimal
+import java.time.LocalDateTime
+import java.util.UUID
 
-/**
- * 좌석 상태 Enum
- */
-enum class SeatStatusEntity {
-    AVAILABLE,  // 예약 가능한 상태
-    RESERVED,   // 임시 배정된 상태 (5분간 유지)
-    SOLD        // 결제 완료되어 판매된 상태
-}
-
-/**
- * 좌석 엔티티
- * 데이터베이스의 SEATS 테이블과 매핑됩니다.
- */
 @Entity
-@Table(name = "SEATS")
+@Table(name = "seats")
 class SeatEntity(
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "seat_id")
-    val seatId: Long = 0,
+    val id: UUID,
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "schedule_id", nullable = false)
-    val schedule: ScheduleEntity,
+    val concertDateId: UUID,
 
-    @Column(name = "seat_number", nullable = false)
     val seatNumber: Int,
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    var status: SeatStatusEntity = SeatStatusEntity.AVAILABLE,
+    val status: SeatStatus,
 
-    @Column(name = "price", nullable = false)
-    val price: BigDecimal
-)
+    val reservedBy: UUID?,
+
+    val reservedAt: LocalDateTime?,
+
+    val temporaryReservationExpiresAt: LocalDateTime?
+) {
+    companion object {
+        fun fromDomain(domain: com.example.tdd.domain.model.Seat): SeatEntity {
+            return SeatEntity(
+                id = domain.id,
+                concertDateId = domain.concertDateId,
+                seatNumber = domain.seatNumber,
+                status = domain.status,
+                reservedBy = domain.reservedBy,
+                reservedAt = domain.reservedAt,
+                temporaryReservationExpiresAt = domain.temporaryReservationExpiresAt
+            )
+        }
+    }
+
+    fun toDomain(): com.example.tdd.domain.model.Seat {
+        // 도메인 모델의 create 메서드를 사용한 후 상태를 변경하는 방식으로 변환
+        val seat = com.example.tdd.domain.model.Seat.create(
+            concertDateId = concertDateId,
+            seatNumber = seatNumber
+        )
+
+        return when (status) {
+            SeatStatus.AVAILABLE -> seat
+            SeatStatus.TEMPORARY_RESERVED -> {
+                if (reservedBy != null) {
+                    val temporaryReserved = seat.temporaryReserve(
+                        userId = reservedBy,
+                        temporaryReservationMinutes = if (temporaryReservationExpiresAt != null) {
+                            val duration = java.time.Duration.between(LocalDateTime.now(), temporaryReservationExpiresAt)
+                            duration.toMinutes().toInt().coerceAtLeast(1)
+                        } else {
+                            5 // 기본값
+                        }
+                    )
+                    temporaryReserved
+                } else {
+                    seat
+                }
+            }
+            SeatStatus.RESERVED -> {
+                if (reservedBy != null) {
+                    val temporaryReserved = seat.temporaryReserve(
+                        userId = reservedBy,
+                        temporaryReservationMinutes = 5 // 임의 값
+                    )
+                    temporaryReserved.confirmReservation()
+                } else {
+                    seat
+                }
+            }
+        }
+    }
+}

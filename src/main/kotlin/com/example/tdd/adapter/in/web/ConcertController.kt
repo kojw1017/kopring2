@@ -1,92 +1,78 @@
 package com.example.tdd.adapter.`in`.web
 
-import com.example.tdd.application.port.`in`.ConcertQueryUseCase
+import com.example.tdd.application.port.`in`.ConcertDateResponse
+import com.example.tdd.application.port.`in`.ConcertReservationUseCase
+import com.example.tdd.application.port.`in`.ReservationResponse
+import com.example.tdd.application.port.`in`.ReserveSeatCommand
+import com.example.tdd.application.port.`in`.SeatResponse
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.math.BigDecimal
-import java.time.LocalDateTime
+import java.util.UUID
 
-/**
- * 콘서트 일정 및 좌석 조회 컨트롤러
- */
 @RestController
 @RequestMapping("/api/concerts")
+@Tag(name = "콘서트 예약", description = "콘서트 예약 관련 API")
 class ConcertController(
-    private val concertQueryUseCase: ConcertQueryUseCase
+    private val concertReservationUseCase: ConcertReservationUseCase
 ) {
 
-    /**
-     * 예약 가능한 콘서트 날짜 목록 조회 API
-     */
     @GetMapping("/dates")
-    fun getAvailableDates(): ResponseEntity<DatesResponse> {
-        val dates = concertQueryUseCase.getAvailableDates()
-
-        return ResponseEntity.ok(
-            DatesResponse(
-                dates = dates.map { schedule ->
-                    ScheduleDto(
-                        scheduleId = schedule.scheduleId,
-                        concertName = schedule.concertName,
-                        concertDate = schedule.concertDate
-                    )
-                }
-            )
-        )
+    @Operation(
+        summary = "예약 가능한 콘서트 날짜 조회",
+        description = "예약 가능한 모든 콘서트 날짜 목록을 조회합니다."
+    )
+    fun getAvailableConcertDates(): ResponseEntity<List<ConcertDateResponse>> {
+        val response = concertReservationUseCase.getAvailableConcertDates()
+        return ResponseEntity.ok(response)
     }
 
-    /**
-     * 특정 날짜의 좌석 목록 조회 API
-     */
-    @GetMapping("/{scheduleId}/seats")
-    fun getSeats(@PathVariable scheduleId: Long): ResponseEntity<SeatsResponse> {
-        val seats = concertQueryUseCase.getSeats(scheduleId)
+    @GetMapping("/dates/{concertDateId}/seats")
+    @Operation(
+        summary = "좌석 조회",
+        description = "특정 콘서트 날짜의 모든 좌석 상태를 조회합니다."
+    )
+    fun getAvailableSeats(
+        @PathVariable concertDateId: UUID
+    ): ResponseEntity<List<SeatResponse>> {
+        val response = concertReservationUseCase.getAvailableSeats(concertDateId)
+        return ResponseEntity.ok(response)
+    }
 
-        return ResponseEntity.ok(
-            SeatsResponse(
-                seats = seats.map { seat ->
-                    SeatDto(
-                        seatNumber = seat.seatNumber,
-                        status = seat.status,
-                        price = seat.price
-                    )
-                }
-            )
+    @PostMapping("/reserve")
+    @Operation(
+        summary = "좌석 예약",
+        description = "특정 콘서트 날짜의 좌석을 임시로 예약합니다."
+    )
+    fun reserveSeat(
+        @Valid @RequestBody request: ReserveSeatRequest
+    ): ResponseEntity<ReservationResponse> {
+        val command = ReserveSeatCommand(
+            token = request.token,
+            concertDateId = request.concertDateId,
+            seatNumber = request.seatNumber
         )
+        val response = concertReservationUseCase.reserveSeat(command)
+        return ResponseEntity.ok(response)
     }
 }
 
-/**
- * 날짜 목록 응답 DTO
- */
-data class DatesResponse(
-    val dates: List<ScheduleDto>
-)
+data class ReserveSeatRequest(
+    @field:NotBlank(message = "토큰이 필요합니다.")
+    val token: String,
 
-/**
- * 콘서트 일정 DTO
- */
-data class ScheduleDto(
-    val scheduleId: Long,
-    val concertName: String,
-    val concertDate: LocalDateTime
-)
+    @field:NotNull(message = "콘서트 날짜 ID가 필요합니다.")
+    val concertDateId: UUID,
 
-/**
- * 좌석 목록 응답 DTO
- */
-data class SeatsResponse(
-    val seats: List<SeatDto>
-)
-
-/**
- * 좌석 정보 DTO
- */
-data class SeatDto(
-    val seatNumber: Int,
-    val status: String,
-    val price: BigDecimal
+    @field:NotNull(message = "좌석 번호가 필요합니다.")
+    val seatNumber: Int
 )

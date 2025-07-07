@@ -1,36 +1,59 @@
 package com.example.tdd.adapter.out.persistence.entity
 
-import jakarta.persistence.Column
+import com.example.tdd.domain.model.PaymentStatus
 import jakarta.persistence.Entity
-import jakarta.persistence.FetchType
-import jakarta.persistence.GeneratedValue
-import jakarta.persistence.GenerationType
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
-import jakarta.persistence.JoinColumn
-import jakarta.persistence.OneToOne
 import jakarta.persistence.Table
-import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.util.UUID
 
-/**
- * 결제 엔티티
- * 데이터베이스의 PAYMENTS 테이블과 매핑됩니다.
- */
 @Entity
-@Table(name = "PAYMENTS")
+@Table(name = "payments")
 class PaymentEntity(
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "payment_id")
-    val paymentId: Long = 0,
+    val id: UUID,
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reservation_id", nullable = false, unique = true)
-    val reservation: ReservationEntity,
+    val userId: UUID,
 
-    @Column(name = "amount", nullable = false)
-    val amount: BigDecimal,
+    val seatId: UUID,
 
-    @Column(name = "payment_date", nullable = false)
-    val paymentDate: LocalDateTime = LocalDateTime.now()
-)
+    val amount: Long,
+
+    @Enumerated(EnumType.STRING)
+    val status: PaymentStatus,
+
+    val createdAt: LocalDateTime,
+
+    val completedAt: LocalDateTime?
+) {
+    companion object {
+        fun fromDomain(domain: com.example.tdd.domain.model.Payment): PaymentEntity {
+            return PaymentEntity(
+                id = domain.id,
+                userId = domain.userId,
+                seatId = domain.seatId,
+                amount = domain.amount,
+                status = domain.status,
+                createdAt = domain.createdAt,
+                completedAt = domain.completedAt
+            )
+        }
+    }
+
+    fun toDomain(): com.example.tdd.domain.model.Payment {
+        // 도메인 모델의 create 메서드를 사용한 후 상태를 변경하는 방식으로 변환
+        val payment = com.example.tdd.domain.model.Payment.create(
+            userId = userId,
+            seatId = seatId,
+            amount = amount
+        )
+
+        return when (status) {
+            PaymentStatus.PENDING -> payment
+            PaymentStatus.COMPLETED -> payment.complete()
+            PaymentStatus.FAILED -> payment.fail()
+        }
+    }
+}

@@ -1,68 +1,103 @@
 package com.example.tdd.domain.model
 
-import com.example.tdd.adapter.`in`.web.exception.ConcurrentModificationException
-import com.example.tdd.adapter.`in`.web.exception.InvalidRequestException
-import java.math.BigDecimal
-
-/**
- * 좌석 상태를 나타내는 Enum
- */
-enum class SeatStatus {
-    AVAILABLE,  // 예약 가능한 상태
-    RESERVED,   // 임시 배정된 상태 (5분간 유지)
-    SOLD        // 결제 완료되어 판매된 상태
-}
+import java.time.LocalDateTime
+import java.util.UUID
 
 /**
  * 좌석 도메인 모델
- * 좌석 번호, 상태, 가격 정보를 관리합니다.
  */
-data class Seat(
-    val seatId: Long,
-    val scheduleId: Long,
+class Seat private constructor(
+    val id: UUID,
+    val concertDateId: UUID,
     val seatNumber: Int,
-    private var _status: SeatStatus = SeatStatus.AVAILABLE,
-    val price: BigDecimal
+    val status: SeatStatus,
+    val reservedBy: UUID?,
+    val reservedAt: LocalDateTime?,
+    val temporaryReservationExpiresAt: LocalDateTime?
 ) {
-    // 좌석 상태 getter
-    val status: SeatStatus
-        get() = _status
-
-    init {
-        require(seatNumber in 1..50) { "좌석 번호는 1부터 50 사이의 값이어야 합니다." }
-        require(price > BigDecimal.ZERO) { "좌석 가격은 0보다 커야 합니다." }
+    companion object {
+        fun create(concertDateId: UUID, seatNumber: Int): Seat {
+            return Seat(
+                id = UUID.randomUUID(),
+                concertDateId = concertDateId,
+                seatNumber = seatNumber,
+                status = SeatStatus.AVAILABLE,
+                reservedBy = null,
+                reservedAt = null,
+                temporaryReservationExpiresAt = null
+            )
+        }
     }
 
     /**
-     * 좌석을 임시 예약 상태로 변경합니다.
-     * @throws ConcurrentModificationException 이미 예약되었거나 판매된 좌석인 경우
+     * 좌석 임시 예약
      */
-    fun reserve() {
-        if (_status != SeatStatus.AVAILABLE) {
-            throw ConcurrentModificationException("이미 예약되었거나 판매된 좌석입니다.")
-        }
-        _status = SeatStatus.RESERVED
+    fun temporaryReserve(userId: UUID, temporaryReservationMinutes: Int): Seat {
+        require(status == SeatStatus.AVAILABLE) { "이미 예약된 좌석입니다." }
+
+        val now = LocalDateTime.now()
+        return copy(
+            status = SeatStatus.TEMPORARY_RESERVED,
+            reservedBy = userId,
+            reservedAt = now,
+            temporaryReservationExpiresAt = now.plusMinutes(temporaryReservationMinutes.toLong())
+        )
     }
 
     /**
-     * 좌석 상태를 판매됨으로 변경합니다.
-     * @throws InvalidRequestException 좌석이 임시 예약 상태가 아닌 경우
+     * 임시 예약 확정 (결제 완료)
      */
-    fun sell() {
-        if (_status != SeatStatus.RESERVED) {
-            throw InvalidRequestException("임시 예약된 좌석만 판매 가능합니다.")
-        }
-        _status = SeatStatus.SOLD
+    fun confirmReservation(): Seat {
+        require(status == SeatStatus.TEMPORARY_RESERVED) { "임시 예약 상태가 아닙니다." }
+        require(!isTemporaryReservationExpired()) { "임시 예약이 만료되었습니다." }
+
+        return copy(
+            status = SeatStatus.RESERVED,
+            temporaryReservationExpiresAt = null
+        )
     }
 
     /**
-     * 좌석 예약을 취소하고 상태를 예약 가능으로 변경합니다.
-     * @throws InvalidRequestException 좌석이 이미 판매된 경우
+     * 임시 예약 취소 또는 만료
      */
-    fun cancelReservation() {
-        if (_status == SeatStatus.SOLD) {
-            throw InvalidRequestException("이미 판매된 좌석은 예약 취소가 불가능합니다.")
-        }
-        _status = SeatStatus.AVAILABLE
+    fun cancelTemporaryReservation(): Seat {
+        require(status == SeatStatus.TEMPORARY_RESERVED) { "임시 예약 상태가 아닙니다." }
+
+        return copy(
+            status = SeatStatus.AVAILABLE,
+            reservedBy = null,
+            reservedAt = null,
+            temporaryReservationExpiresAt = null
+        )
     }
+
+    /**
+     * 임시 예약이 만료되었는지 확인
+     */
+    fun isTemporaryReservationExpired(): Boolean {
+        return status == SeatStatus.TEMPORARY_RESERVED &&
+               temporaryReservationExpiresAt != null &&
+               LocalDateTime.now().isAfter(temporaryReservationExpiresAt)
+    }
+
+    private fun copy(
+        id: UUID = this.id,
+        concertDateId: UUID = this.concertDateId,
+        seatNumber: Int = this.seatNumber,
+        status: SeatStatus = this.status,
+        reservedBy: UUID? = this.reservedBy,
+        reservedAt: LocalDateTime? = this.reservedAt,
+        temporaryReservationExpiresAt: LocalDateTime? = this.temporaryReservationExpiresAt
+    ): Seat {
+        return Seat(id, concertDateId, seatNumber, status, reservedBy, reservedAt, temporaryReservationExpiresAt)
+    }
+}
+
+/**
+ * 좌석 상태
+ */
+enum class SeatStatus {
+    AVAILABLE,           // 예약 가능
+    TEMPORARY_RESERVED,  // 임시 예약 (결제 대기 중)
+    RESERVED             // 예약 완료 (결제 완료)
 }

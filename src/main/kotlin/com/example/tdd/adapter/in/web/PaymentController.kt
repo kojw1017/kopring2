@@ -1,84 +1,48 @@
 package com.example.tdd.adapter.`in`.web
 
-import com.example.tdd.adapter.`in`.web.exception.TokenException
-import com.example.tdd.application.port.`in`.PaymentCommand
+import com.example.tdd.application.port.`in`.PaymentResponse
 import com.example.tdd.application.port.`in`.PaymentUseCase
-import com.example.tdd.application.service.TokenProvider
+import com.example.tdd.application.port.`in`.ProcessPaymentCommand
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import java.util.UUID
 
-/**
- * 결제 처리 컨트롤러
- */
 @RestController
 @RequestMapping("/api/payments")
+@Tag(name = "결제", description = "결제 처리 API")
 class PaymentController(
-    private val paymentUseCase: PaymentUseCase,
-    private val tokenProvider: TokenProvider
+    private val paymentUseCase: PaymentUseCase
 ) {
 
-    /**
-     * 결제 처리 API
-     */
-    @PostMapping
+    @PostMapping("/process")
+    @Operation(
+        summary = "결제 처리",
+        description = "임시 예약된 좌석에 대한 결제를 처리합니다."
+    )
     fun processPayment(
-        @RequestHeader("Authorization") authHeader: String,
-        @RequestBody request: PaymentRequest
+        @Valid @RequestBody request: ProcessPaymentRequest
     ): ResponseEntity<PaymentResponse> {
-        // 토큰에서 사용자 ID 추출 (실제 구현에서는 JWT 검증 로직 필요)
-        val userId = extractUserId(authHeader)
-
-        // 결제 명령 생성
-        val command = PaymentCommand(
-            userId = userId,
+        val command = ProcessPaymentCommand(
+            token = request.token,
             reservationId = request.reservationId
         )
-
-        // 유스케이스 호출
-        val result = paymentUseCase.processPayment(command)
-
-        // 응답 생성
-        return ResponseEntity.ok(
-            PaymentResponse(
-                paymentId = result.paymentId,
-                message = "결제가 성공적으로 완료되었습니다."
-            )
-        )
-    }
-
-    /**
-     * 토큰에서 사용자 ID를 추출합니다.
-     * JWT 검증 및 클레임 추출 로직을 수행합니다.
-     */
-    private fun extractUserId(authHeader: String): String {
-        // "Bearer " 접두사 제거
-        val token = authHeader.replace("Bearer ", "")
-
-        try {
-            // JWT 토큰 검증 및 클레임 추출
-            val claims = tokenProvider.validateToken(token)
-            return claims.subject
-        } catch (e: Exception) {
-            throw TokenException("유효하지 않은 토큰입니다.", path = "/api/payments")
-        }
+        val response = paymentUseCase.processPayment(command)
+        return ResponseEntity.ok(response)
     }
 }
 
-/**
- * 결제 요청 DTO
- */
-data class PaymentRequest(
-    val reservationId: Long
-)
+data class ProcessPaymentRequest(
+    @field:NotBlank(message = "토큰이 필요합니다.")
+    val token: String,
 
-/**
- * 결제 응답 DTO
- */
-data class PaymentResponse(
-    val paymentId: Long,
-    val message: String
+    @field:NotNull(message = "예약 ID가 필요합니다.")
+    val reservationId: UUID
 )
